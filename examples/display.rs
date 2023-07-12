@@ -1,8 +1,8 @@
-#![feature(ptr_metadata, trait_alias, pointer_byte_offsets)]
+#![feature(ptr_metadata, pointer_byte_offsets)]
 
 use std::fmt::Display;
 
-use dyn_slice::declare_dyn_slice;
+use dyn_slice::{declare_dyn_slice, DynSliceTrait};
 
 declare_dyn_slice!(Display, display_dyn_slice);
 use display_dyn_slice::*;

@@ -1,6 +1,6 @@
-#![feature(ptr_metadata, trait_alias, pointer_byte_offsets)]
+#![feature(ptr_metadata, pointer_byte_offsets)]
 
-use dyn_slice::declare_dyn_slice;
+use dyn_slice::{declare_dyn_slice, DynSliceTrait};
 
 pub trait MyTrait<T> {
     fn to_t(&self) -> T;
@@ -29,7 +29,7 @@ use my_trait_dyn_slice::*;
 
 declare_dyn_slice!(MyTrait:<u64>, my_trait_u64_dyn_slice);
 #[allow(unused_imports)]
-use my_trait_u64_dyn_slice::{DynSlice as DynSliceMTU64, Iter as IterMTU64};
+use my_trait_u64_dyn_slice::DynSlice as DynSliceMTU64;
 
 fn main() {
     let array: [u8; 4] = [1, 2, 3, 4];

@@ -19,10 +19,14 @@ jobs:
     - name: Clippy
       run: |
         cargo clippy --all-targets
+        cargo clippy --all-targets --all-features
         cargo clippy --no-default-features
     - name: Build
       run: |
         cargo build --verbose
+        cargo build --verbose --all-features
         cargo build --verbose --no-default-features
     - name: Run tests
-      run: cargo test
+      run: |
+        cargo test
+        cargo test --all-features

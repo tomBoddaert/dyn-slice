@@ -1,6 +1,6 @@
-#![feature(ptr_metadata, trait_alias, pointer_byte_offsets)]
+#![feature(ptr_metadata, pointer_byte_offsets)]
 
-use dyn_slice::declare_dyn_slice;
+use dyn_slice::{declare_dyn_slice, DynSliceTrait};
 
 pub trait MyTrait {
     fn to_u64(&self) -> u64;

@@ -7,19 +7,92 @@
     clippy::cargo
 )]
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(feature = "alloc", feature(allocator_api))]
+
+mod dyn_slice_trait;
+pub use dyn_slice_trait::*;
+pub mod standard;
 
 #[cfg(all(debug_assertions, not(feature = "std")))]
 #[doc(hidden)]
 mod no_std_test;
 
 #[macro_export]
+/// Declares a new dyn slice and implements the [`DynSliceTrait`] trait on it
+///
+/// # Syntax
+///
+/// Simple trait:  
+/// `declare_dyn_slice!(Trait, new_module_name);`
+///
+/// Trait with a given generic:  
+/// `declare_dyn_slice!(Trait:<Type>, new_module_name);`
+///
+/// Trait with a generic:
+/// `declare_dyn_slice!(<T>, Trait:<T>, new_module_name);`
+///
+/// # Examples
+///
+/// Display:
+/// ```
+/// # #![feature(ptr_metadata)]
+/// # use dyn_slice::declare_dyn_slice;
+/// declare_dyn_slice!(std::fmt::Display, display_dyn_slice);
+/// pub use display_dyn_slice::DynSlice as DisplayDynSlice;
+/// ```
+///
+/// Generics:
+/// ```
+/// pub trait A<B, C> {
+///     fn b(&self) -> B;
+///     fn c(&self) -> C;
+/// }
+/// ```
+///
+/// ```
+/// # #![feature(ptr_metadata)]
+/// # mod test {
+/// # use dyn_slice::declare_dyn_slice;
+/// # pub trait A<B, C> {
+/// #     fn b(&self) -> B;
+/// #     fn c(&self) -> C;
+/// # }
+/// declare_dyn_slice!(A:<u8, f32>, given_generic_dyn_slice);
+/// # }
+/// ```
+///
+/// ```
+/// # #![feature(ptr_metadata)]
+/// # mod test {
+/// # use dyn_slice::declare_dyn_slice;
+/// # pub trait A<B, C> {
+/// #     fn b(&self) -> B;
+/// #     fn c(&self) -> C;
+/// # }
+/// declare_dyn_slice!(<C>, A:<u8, C>, half_given_generic_dyn_slice);
+/// # }
+/// ```
+///
+/// ```
+/// # #![feature(ptr_metadata)]
+/// # mod test {
+/// # use dyn_slice::declare_dyn_slice;
+/// # pub trait A<B, C> {
+/// #     fn b(&self) -> B;
+/// #     fn c(&self) -> C;
+/// # }
+/// declare_dyn_slice!(<B, C>, A:<B, C>, generic_dyn_slice);
+/// # }
+/// ```
 macro_rules! declare_dyn_slice {
     ( $(< $( $gen:ident ),* >,)? $tr:path$( :<$( $trgen:ident ),*> )?, $vis:vis $name:ident $(,)? ) => {
         $vis mod $name {
+            #[allow(unused_imports)]
             use super::*;
             use $tr as Trait;
 
             #[derive(Clone, Copy)]
+            #[doc = concat!("`&dyn [", stringify!($tr), "]`")]
             pub struct DynSlice<'a $($(, $gen )*)?> {
                 metadata: core::ptr::DynMetadata<dyn Trait $(< $($trgen),* >)?>,
                 len: usize,
@@ -60,6 +133,8 @@ macro_rules! declare_dyn_slice {
                 }
 
                 #[must_use]
+                /// # Safety
+                #[doc = concat!("Caller must ensure that `metadata` is a valid instance of `DynMetadata` for `DynSliceFromType` and `", stringify!($tr), "`")]
                 pub const unsafe fn with_metadata<DynSliceFromType: Trait $(< $($trgen),* >)?>(
                     value: &'a [DynSliceFromType],
                     metadata: core::ptr::DynMetadata<dyn Trait $(< $($trgen),* >)?>
@@ -71,151 +146,38 @@ macro_rules! declare_dyn_slice {
                         phantom: core::marker::PhantomData,
                     }
                 }
+            }
 
-                #[allow(dead_code)]
-                #[must_use]
-                pub const fn len(&self) -> usize {
+            unsafe impl<'a $($(, $gen )*)?> $crate::DynSliceTrait for DynSlice<'a $($(, $gen )*)?> {
+                type Dyn = dyn Trait $(< $($trgen),* >)?;
+
+                #[inline]
+                fn metadata(&self) -> core::ptr::DynMetadata<Self::Dyn> {
+                    self.metadata
+                }
+
+                #[inline]
+                fn len(&self) -> usize {
                     self.len
                 }
 
-                #[allow(dead_code)]
-                #[must_use]
-                pub const fn is_empty(&self) -> bool {
-                    self.len == 0
-                }
-
-                #[allow(dead_code)]
-                #[must_use]
-                pub fn first(&self) -> Option<&dyn Trait $(< $($trgen),* >)?> {
-                    if self.is_empty() {
-                        None
-                    } else {
-                        Some(unsafe {
-                            core::ptr::from_raw_parts::<dyn Trait $(< $($trgen),* >)?>(
-                                self.data,
-                                self.metadata
-                            ).as_ref().unwrap()
-                        })
-                    }
-                }
-
-                #[allow(dead_code)]
-                #[must_use]
-                pub fn last(&self) -> Option<&dyn Trait $(< $($trgen),* >)?> {
-                    if self.is_empty() {
-                        None
-                    } else {
-                        Some(unsafe { self.get_unchecked(self.len - 1) })
-                    }
-                }
-
-                #[allow(dead_code)]
-                #[must_use]
-                pub fn get(&self, index: usize) -> Option<&dyn Trait $(< $($trgen),* >)?> {
-                    if index >= self.len {
-                        None
-                    } else {
-                        Some(unsafe { self.get_unchecked(index) })
-                    }
-                }
-
-                #[allow(dead_code)]
-                #[must_use]
-                /// # Safety
-                /// The caller must ensure that index < self.len()
-                /// Calling this on an empty dyn Slice will result in a segfault!
-                pub unsafe fn get_unchecked(&'a self, index: usize) -> &'a dyn Trait $(< $($trgen),* >)? {
-                    unsafe {
-                        core::ptr::from_raw_parts::<dyn Trait $(< $($trgen),* >)?>(
-                            self.data.byte_add(self.metadata.size_of() * index),
-                            self.metadata
-                        ).as_ref().unwrap()
-                    }
+                #[inline]
+                fn as_ptr(&self) -> *const () {
+                    self.data
                 }
             }
 
-            impl<'a $($(, $gen )*)?> core::ops::Index<usize> for DynSlice<'a $($(, $gen )*)?>
-            where
-                Self: 'a
-            {
-                type Output = dyn Trait $(< $($trgen),* >)?;
+            impl<'a $($(, $gen )*)?> core::ops::Index<usize> for DynSlice<'a $($(, $gen )*)?> {
+                type Output = <Self as $crate::DynSliceTrait>::Dyn;
 
                 fn index(&self, index: usize) -> &Self::Output {
-                    use core::mem::transmute;
-
                     if index >= self.len {
                         panic!("index out of bounds");
                     }
 
-                    // Safety:
-                    // The source slice is guaranteed to live for 'a, so the lifetime can
-                    // be extended to equal the lifetime of &self, as it must be at least 'a
-                    unsafe { transmute(self.get_unchecked(index)) }
+                    unsafe { <Self as $crate::DynSliceTrait>::get_unchecked(&self, index) }
                 }
             }
-
-            impl<'a $($(, $gen )*)?> DynSlice<'a $($(, $gen )*)?> {
-                #[allow(dead_code)]
-                #[must_use]
-                pub const fn iter(&'a self) -> Iter<'a $($(, $gen )*)?> {
-                    Iter {
-                        slice: self,
-                        next_index: 0,
-                    }
-                }
-            }
-
-            #[derive(Clone)]
-            pub struct Iter<'a $($(, $gen )*)?> {
-                slice: &'a DynSlice<'a $($(, $gen )*)?>,
-                next_index: usize,
-            }
-
-            impl<'a $($(, $gen )*)?> Iterator for Iter<'a $($(, $gen )*)?> {
-                type Item = &'a dyn Trait $(< $($trgen),* >)?;
-
-                fn next(&mut self) -> Option<Self::Item> {
-                    if self.next_index == self.slice.len {
-                        None
-                    } else {
-                        let element = unsafe { self.slice.get_unchecked(self.next_index) };
-                        self.next_index += 1;
-
-                        Some(element)
-                    }
-                }
-
-                fn size_hint(&self) -> (usize, Option<usize>) {
-                    let remaining = self.slice.len - self.next_index;
-                    (remaining, Some(remaining))
-                }
-
-                fn count(self) -> usize {
-                    self.slice.len - self.next_index
-                }
-
-                fn nth(&mut self, n: usize) -> Option<Self::Item> {
-                    let index = self.next_index + n;
-                    if index >= self.slice.len {
-                        self.next_index = self.slice.len;
-                        return None;
-                    }
-
-                    self.next_index = index;
-                    self.next()
-                }
-
-                fn last(self) -> Option<Self::Item> {
-                    if self.next_index == self.slice.len {
-                        None
-                    } else {
-                        self.slice.last()
-                    }
-                }
-            }
-
-            impl<'a $($(, $gen )*)?> core::iter::FusedIterator for Iter<'a $($(, $gen )*)?> {}
-            impl<'a $($(, $gen )*)?> ExactSizeIterator for Iter<'a $($(, $gen )*)?> {}
         }
     };
 }
@@ -224,7 +186,7 @@ macro_rules! declare_dyn_slice {
 mod test {
     use std::fmt::Display;
 
-    use super::declare_dyn_slice;
+    use super::{declare_dyn_slice, DynSliceTrait};
 
     declare_dyn_slice!(Display, display_dyn_slice);
     pub use display_dyn_slice::*;
