@@ -152,6 +152,16 @@ macro_rules! declare_dyn_slice {
                 type Dyn = dyn Trait $(< $($trgen),* >)?;
 
                 #[inline]
+                unsafe fn from_parts(metadata: core::ptr::DynMetadata<Self::Dyn>, len: usize, data: *const ()) -> Self {
+                    Self {
+                        metadata,
+                        len,
+                        data,
+                        phantom: core::marker::PhantomData,
+                    }
+                }
+
+                #[inline]
                 fn metadata(&self) -> core::ptr::DynMetadata<Self::Dyn> {
                     self.metadata
                 }
