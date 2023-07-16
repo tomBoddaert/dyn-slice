@@ -1,11 +1,10 @@
 use core::{
     ops::RangeBounds,
     ptr::{DynMetadata, Pointee},
+    slice,
 };
 
-/// The trait for dyn slices.
-///
-/// This trait implements most methods for dyn slices, as defined by the [`super::declare_dyn_slice`] macro.
+/// Implementations for most methods for dyn slices.
 ///
 /// **You should not need to implement this manually!**  
 /// It is implemented by the [`super::declare_dyn_slice`] macro.
@@ -17,10 +16,12 @@ use core::{
 /// - `as_ptr` yields the pointer to the start of the underlying slice,
 /// - the underlying slice has the same layout as [`[T]`](https://doc.rust-lang.org/reference/type-layout.html#slice-layout),
 /// - the implementing type must not live for longer than the underlying slice
-pub unsafe trait DynSliceTrait: Sized {
+pub unsafe trait DynSliceMethods: Sized {
     /// The unsized, dynamic type (`dyn $Trait`)
     type Dyn: ?Sized + Pointee<Metadata = DynMetadata<Self::Dyn>>;
 
+    /// Construct a dyn slice from raw parts.
+    ///
     /// # Safety
     /// Caller must ensure that:
     /// - `metadata` is a valid instance of `DynMetadata`,
@@ -93,6 +94,8 @@ pub unsafe trait DynSliceTrait: Sized {
     }
 
     #[must_use]
+    /// Get a sub-slice from the `start` index with the `len`, without doing bounds checking.
+    ///
     /// # Safety
     /// Caller must ensure that:
     /// - `start` < `self.len()`
@@ -107,6 +110,7 @@ pub unsafe trait DynSliceTrait: Sized {
     }
 
     #[must_use]
+    /// Returns a sub-slice from the `start` index with the `len` or `None` if the slice is out of bounds.
     fn slice<R: RangeBounds<usize>>(&self, range: R) -> Option<Self> {
         use core::ops::Bound;
 
@@ -131,6 +135,15 @@ pub unsafe trait DynSliceTrait: Sized {
         Some(unsafe { self.slice_unchecked(start_inclusive, len) })
     }
 
+    #[must_use]
+    /// Returns the underlying slice as `&[T]`.
+    ///
+    /// # Safety
+    /// The caller must ensure that the underlying slice is of type `[T]`.
+    unsafe fn downcast_unchecked<T>(&self) -> &[T] {
+        slice::from_raw_parts(self.as_ptr().cast(), self.len())
+    }
+
     #[inline]
     #[must_use]
     /// Returns an iterator over the slice.
@@ -144,12 +157,12 @@ pub unsafe trait DynSliceTrait: Sized {
 
 #[derive(Clone)]
 /// Dyn slice iterator
-pub struct Iter<'a, DS: DynSliceTrait + 'a> {
+pub struct Iter<'a, DS: DynSliceMethods + 'a> {
     slice: &'a DS,
     next_index: usize,
 }
 
-impl<'a, DS: DynSliceTrait + 'a> Iterator for Iter<'a, DS> {
+impl<'a, DS: DynSliceMethods + 'a> Iterator for Iter<'a, DS> {
     type Item = &'a DS::Dyn;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -194,8 +207,8 @@ impl<'a, DS: DynSliceTrait + 'a> Iterator for Iter<'a, DS> {
     }
 }
 
-impl<'a, DS: DynSliceTrait + 'a> core::iter::FusedIterator for Iter<'a, DS> {}
-impl<'a, DS: DynSliceTrait + 'a> ExactSizeIterator for Iter<'a, DS> {}
+impl<'a, DS: DynSliceMethods + 'a> core::iter::FusedIterator for Iter<'a, DS> {}
+impl<'a, DS: DynSliceMethods + 'a> ExactSizeIterator for Iter<'a, DS> {}
 
 #[cfg(test)]
 mod test {
@@ -203,7 +216,7 @@ mod test {
 
     use crate::standard::PartialEqDynSlice;
 
-    use super::DynSliceTrait;
+    use super::DynSliceMethods;
 
     #[test]
     fn test_slice() {
@@ -214,13 +227,10 @@ mod test {
         // Slices equal to the original slice
         let full_slices = [
             slice.slice(..).unwrap(),
-
             slice.slice(0..).unwrap(),
-
             slice.slice(..(array.len())).unwrap(),
             #[allow(clippy::range_minus_one)]
             slice.slice(..=(array.len() - 1)).unwrap(),
-
             slice.slice(0..array.len()).unwrap(),
             #[allow(clippy::range_minus_one)]
             slice.slice(0..=(array.len() - 1)).unwrap(),

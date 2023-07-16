@@ -21,11 +21,13 @@ jobs:
         cargo clippy --all-targets
         cargo clippy --all-targets --all-features
         cargo clippy --no-default-features
+        cargo clippy --no-default-features --features="alloc"
     - name: Build
       run: |
         cargo build --verbose
         cargo build --verbose --all-features
         cargo build --verbose --no-default-features
+        cargo build --verbose --no-default-features --features="alloc"
     - name: Run tests
       run: |
         cargo test

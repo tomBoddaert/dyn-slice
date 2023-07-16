@@ -1,6 +1,6 @@
 [package]
 name = "dyn-slice"
-version = "1.0.0-alpha.2"
+version = "1.0.0"
 authors = ["Tom Boddaert"]
 edition = "2021"
 description = "&dyn [Trait] implementation, inspired by a Reddit thread."
@@ -18,6 +18,6 @@ path = "lib/lib.rs"
 crate-type = ["lib"]
 
 [features]
-default = ["std"]
+default = ["std", "alloc"]
 std = []
 alloc = []
