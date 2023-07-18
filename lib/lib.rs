@@ -112,10 +112,11 @@ macro_rules! declare_dyn_slice {
             #[doc = concat!("`&dyn [", stringify!($tr), "]`")]
             $(#[ $meta ])*
             pub struct DynSlice<'a $($(, $gen )*)?> {
-                metadata: core::ptr::DynMetadata<dyn Trait $(< $($trgen),* >)?>,
+                // metadata: core::ptr::DynMetadata<dyn Trait $(< $($trgen),* >)?>,
+                vtable_ptr: *const (),
                 len: usize,
                 data: *const (),
-                phantom: core::marker::PhantomData<&'a ()>,
+                phantom: core::marker::PhantomData<&'a dyn Trait $(< $($trgen),* >)?>,
             }
 
             impl<'a $($(, $gen )*)?> DynSlice<'a $($(, $gen )*)?> {
@@ -137,29 +138,45 @@ macro_rules! declare_dyn_slice {
                     unsafe {
                         // Get the dyn metadata from the first element of value
                         // If value is empty, the metadata should never be accessed, so set it to a null pointer
-                        let metadata = value.get(0).map_or(
-                            transmute(null::<()>()),
+                        let vtable_ptr = value.get(0).map_or(
+                            null::<()>(),
                             |example| {
-                                metadata(transmute::<
+                                transmute(metadata(transmute::<
                                     _,
                                     &'static dyn Trait $(< $($trgen),* >)?
-                                >(example as &dyn Trait $(< $($trgen),* >)?))
+                                >(example as &dyn Trait $(< $($trgen),* >)?)))
                             }
                         );
 
-                        Self::with_metadata(value, metadata)
+                        Self::with_vtable_ptr(value, vtable_ptr)
                     }
                 }
 
                 #[must_use]
                 /// # Safety
-                #[doc = concat!("Caller must ensure that `metadata` is a valid instance of `DynMetadata` for `DynSliceFromType` and `", stringify!($tr), "`")]
+                #[doc = concat!("Caller must ensure that `vtable_ptr` is a valid instance of `DynMetadata` for `DynSliceFromType` and `dyn ", stringify!($tr), "` transmuted, or optionally, a null pointer if `value.len() == 0`.")]
+                pub const unsafe fn with_vtable_ptr<DynSliceFromType: Trait $(< $($trgen),* >)?>(
+                    value: &'a [DynSliceFromType],
+                    vtable_ptr: *const (),
+                ) -> Self {
+                    Self {
+                        vtable_ptr,
+                        len: value.len(),
+                        data: value.as_ptr().cast(),
+                        phantom: core::marker::PhantomData,
+                    }
+                }
+
+                #[allow(dead_code)]
+                #[must_use]
+                /// # Safety
+                #[doc = concat!("Caller must ensure that `metadata` is a valid instance of `DynMetadata` for `DynSliceFromType` and `dyn ", stringify!($tr), "`")]
                 pub const unsafe fn with_metadata<DynSliceFromType: Trait $(< $($trgen),* >)?>(
                     value: &'a [DynSliceFromType],
                     metadata: core::ptr::DynMetadata<dyn Trait $(< $($trgen),* >)?>
                 ) -> Self {
                     Self {
-                        metadata,
+                        vtable_ptr: core::mem::transmute(metadata),
                         len: value.len(),
                         data: value.as_ptr().cast(),
                         phantom: core::marker::PhantomData,
@@ -171,9 +188,9 @@ macro_rules! declare_dyn_slice {
                 type Dyn = dyn Trait $(< $($trgen),* >)?;
 
                 #[inline]
-                unsafe fn from_parts(metadata: core::ptr::DynMetadata<Self::Dyn>, len: usize, data: *const ()) -> Self {
+                unsafe fn from_parts(vtable_ptr: *const (), len: usize, data: *const ()) -> Self {
                     Self {
-                        metadata,
+                        vtable_ptr,
                         len,
                         data,
                         phantom: core::marker::PhantomData,
@@ -181,8 +198,8 @@ macro_rules! declare_dyn_slice {
                 }
 
                 #[inline]
-                fn metadata(&self) -> core::ptr::DynMetadata<Self::Dyn> {
-                    self.metadata
+                fn vtable_ptr(&self) -> *const () {
+                    self.vtable_ptr
                 }
 
                 #[inline]

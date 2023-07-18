@@ -1,4 +1,5 @@
 use core::{
+    mem::transmute,
     ops::RangeBounds,
     ptr::{DynMetadata, Pointee},
     slice,
@@ -11,6 +12,7 @@ use core::{
 ///
 /// # Safety
 /// Implementer must ensure that:
+/// - `vtable_ptr` yields a valid instance of `DynMetadata` transmuted for the type contained in the slice, or optionally null if and only if the slice is empty,
 /// - `metadata` yields a valid instance of `DynMetadata` for the type contained in the slice,
 //  - `len` yields the correct length of the underlying slice,
 /// - `as_ptr` yields the pointer to the start of the underlying slice,
@@ -24,17 +26,39 @@ pub unsafe trait DynSliceMethods: Sized {
     ///
     /// # Safety
     /// Caller must ensure that:
+    /// - `vtable_ptr` is a valid instance of `DynMetadata` transmuted, or optionally, a null pointer if `len == 0`,
+    /// - `len` <= then length of the slice in memory from the `data` pointer,
+    /// - `data` is a valid pointer to the slice,
+    /// - the underlying slice is the same layout as [`[T]`](https://doc.rust-lang.org/reference/type-layout.html#slice-layout)
+    #[must_use]
+    unsafe fn from_parts(vtable_ptr: *const (), len: usize, data: *const ()) -> Self;
+    /// Construct a dyn slice from raw parts with a `DynMetadata` instance rather than a vtable pointer.
+    ///
+    /// # Safety
+    /// Caller must ensure that:
     /// - `metadata` is a valid instance of `DynMetadata`,
     /// - `len` <= then length of the slice in memory from the `data` pointer,
     /// - `data` is a valid pointer to the slice,
     /// - the underlying slice is the same layout as [`[T]`](https://doc.rust-lang.org/reference/type-layout.html#slice-layout)
-    unsafe fn from_parts(metadata: DynMetadata<Self::Dyn>, len: usize, data: *const ()) -> Self;
+    #[must_use]
+    unsafe fn from_parts_with_metadata(
+        metadata: DynMetadata<Self::Dyn>,
+        len: usize,
+        data: *const (),
+    ) -> Self {
+        Self::from_parts(transmute(metadata), len, data)
+    }
 
-    /// Get the metadata component of the element's pointers.
-    fn metadata(&self) -> DynMetadata<Self::Dyn>;
+    /// Get the vtable pointer, which may be null if the slice is empty.
+    fn vtable_ptr(&self) -> *const ();
+    /// Get the metadata component of the element's pointers, or possibly `None` if the slice is empty.
+    fn metadata(&self) -> Option<DynMetadata<Self::Dyn>> {
+        let vtable_ptr = self.vtable_ptr();
+        (!vtable_ptr.is_null()).then(|| unsafe { transmute(vtable_ptr) })
+    }
     /// Returns the number of elements in the slice.
     fn len(&self) -> usize;
-    /// Returns a pointer to the underlying slice.
+    /// Returns a pointer to the underlying slice, which may be null if the slice is empty.
     fn as_ptr(&self) -> *const ();
 
     #[inline]
@@ -51,7 +75,7 @@ pub unsafe trait DynSliceMethods: Sized {
             None
         } else {
             Some(unsafe {
-                core::ptr::from_raw_parts::<Self::Dyn>(self.as_ptr(), self.metadata())
+                core::ptr::from_raw_parts::<Self::Dyn>(self.as_ptr(), transmute(self.vtable_ptr()))
                     .as_ref()
                     .unwrap()
             })
@@ -85,9 +109,10 @@ pub unsafe trait DynSliceMethods: Sized {
     /// The caller must ensure that index < self.len()
     /// Calling this on an empty dyn Slice will result in a segfault!
     unsafe fn get_unchecked(&self, index: usize) -> &Self::Dyn {
+        let metadata = transmute::<_, DynMetadata<Self::Dyn>>(self.vtable_ptr());
         core::ptr::from_raw_parts::<Self::Dyn>(
-            self.as_ptr().byte_add(self.metadata().size_of() * index),
-            self.metadata(),
+            self.as_ptr().byte_add(metadata.size_of() * index),
+            metadata,
         )
         .as_ref()
         .unwrap()
@@ -101,8 +126,8 @@ pub unsafe trait DynSliceMethods: Sized {
     /// - `start` < `self.len()`
     /// - `len` <= `self.len() - start`
     unsafe fn slice_unchecked(&self, start: usize, len: usize) -> Self {
-        let metadata = self.metadata();
-        Self::from_parts(
+        let metadata = transmute::<_, DynMetadata<Self::Dyn>>(self.vtable_ptr());
+        Self::from_parts_with_metadata(
             metadata,
             len,
             self.as_ptr().byte_add(metadata.size_of() * start),

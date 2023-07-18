@@ -1,6 +1,6 @@
 [package]
 name = "dyn-slice"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Tom Boddaert"]
 edition = "2021"
 description = "&dyn [Trait] implementation, inspired by a Reddit thread."
