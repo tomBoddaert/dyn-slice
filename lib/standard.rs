@@ -15,27 +15,53 @@ use crate::DynSliceMut;
 
 use super::{declare_new_fn, DynSlice};
 
-declare_new_fn!(Any, pub any);
-impl<'a> DynSlice<'a, dyn Any> {
-    /// Returns `true` if the underlying slice is of type `T`.
-    #[must_use]
-    pub fn is<T: 'static>(&self) -> bool {
-        self.get(0).map_or(true, <dyn Any>::is::<T>)
-    }
+macro_rules! impl_debug {
+    ( $( $t:ty ),* ) => {
+        $(
+            impl<'a> Debug for DynSlice<'a, $t> {
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    f.debug_list().entries(self.iter()).finish()
+                }
+            }
+            impl<'a> Debug for $crate::DynSliceMut<'a, $t> {
+                #[inline]
+                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                    self.0.fmt(f)
+                }
+            }
+        )*
+    };
+}
 
-    /// Returns the underlying slice as `&[T]`, or `None` if the underlying slice is not of type `T`.
-    #[must_use]
-    pub fn downcast<T: 'static>(&self) -> Option<&[T]> {
-        unsafe { self.is::<T>().then(|| self.downcast_unchecked()) }
-    }
+declare_new_fn!(Any, pub any);
+macro_rules! impl_any_methods {
+    ( $( $t:ty ),* ) => {
+        $(
+            impl<'a> DynSlice<'a, $t> {
+                /// Returns `true` if the underlying slice is of type `T`.
+                #[must_use]
+                pub fn is<T: 'static>(&self) -> bool {
+                    self.get(0).map_or(true, <$t>::is::<T>)
+                }
+
+                /// Returns the underlying slice as `&[T]`, or `None` if the underlying slice is not of type `T`.
+                #[must_use]
+                pub fn downcast<T: 'static>(&self) -> Option<&[T]> {
+                    unsafe { self.is::<T>().then(|| self.downcast_unchecked()) }
+                }
+            }
+            impl<'a> DynSliceMut<'a, $t> {
+                /// Returns the underlying slice as `&mut [T]`, or `None` if the underlying slice is not of type `T`.
+                #[must_use]
+                pub fn downcast_mut<T: 'static>(&mut self) -> Option<&mut [T]> {
+                    unsafe { self.is::<T>().then(|| self.downcast_unchecked_mut()) }
+                }
+            }
+        )*
+    };
 }
-impl<'a> DynSliceMut<'a, dyn Any> {
-    /// Returns the underlying slice as `&mut [T]`, or `None` if the underlying slice is not of type `T`.
-    #[must_use]
-    pub fn downcast_mut<T: 'static>(&mut self) -> Option<&mut [T]> {
-        unsafe { self.is::<T>().then(|| self.downcast_unchecked_mut()) }
-    }
-}
+impl_any_methods!(dyn Any, dyn Any + Send, dyn Any + Sync + Send);
+impl_debug!(dyn Any, dyn Any + Send, dyn Any + Sync + Send);
 
 declare_new_fn!(<T>, AsRef:<T>, pub as_ref);
 declare_new_fn!(<T>, AsMut:<T>, pub as_mut);
@@ -80,26 +106,7 @@ impl<'a, Rhs> PartialEq<[Rhs]> for DynSliceMut<'a, dyn PartialOrd<Rhs>> {
 declare_new_fn!(Binary, pub binary);
 
 declare_new_fn!(Debug, pub debug);
-impl<'a> Debug for DynSlice<'a, dyn Debug> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[")?;
-        let mut iter = self.iter();
-        if let Some(element) = iter.next() {
-            element.fmt(f)?;
-        }
-        for element in iter {
-            write!(f, ", ")?;
-            element.fmt(f)?;
-        }
-        write!(f, "]")
-    }
-}
-impl<'a> Debug for DynSliceMut<'a, dyn Debug> {
-    #[inline]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
+impl_debug!(dyn Debug);
 
 declare_new_fn!(Display, pub display);
 declare_new_fn!(LowerExp, pub lower_exp);
@@ -128,32 +135,34 @@ pub trait To<T> {
 }
 
 // From implies Into, so Into is used to include both traits
-impl<T, F: Clone + Into<T>> To<T> for F {
+impl<T, F: Into<T> + Copy> To<T> for F {
+    #[inline]
     fn to(&self) -> T {
-        self.clone().into()
+        (*self).into()
     }
 }
 
 declare_new_fn!(<T>, To:<T>, pub to);
 
 #[cfg(feature = "alloc")]
-mod alloc_lib {
+mod standard_alloc {
     extern crate alloc;
     use alloc::string::ToString;
 
     use crate::declare_new_fn;
 
     declare_new_fn!(
+        #[cfg_attr(doc, doc(cfg(feature = "alloc")))]
         #[doc = concat!("(only available with the [`alloc` feature](https://docs.rs/crate/dyn-slice/", env!("CARGO_PKG_VERSION"),"/features))")]
         ToString,
         pub to_string
     );
 }
 #[cfg(feature = "alloc")]
-pub use alloc_lib::*;
+pub use standard_alloc::*;
 
 #[cfg(feature = "std")]
-mod std_lib {
+mod standard_std {
     use core::fmt::{self, Debug};
     use std::{
         error::Error,
@@ -163,38 +172,28 @@ mod std_lib {
     use crate::{declare_new_fn, DynSlice};
 
     declare_new_fn!(
+        #[cfg_attr(doc, doc(cfg(feature = "std")))]
         #[doc = concat!("(only available with the [`std` feature](https://docs.rs/crate/dyn-slice/", env!("CARGO_PKG_VERSION"),"/features))")]
         Error,
         pub error,
     );
-    impl<'a> Debug for DynSlice<'a, dyn Error> {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "[")?;
-            let mut iter = self.iter();
-            if let Some(element) = iter.next() {
-                Debug::fmt(element, f)?;
-            }
-            for element in iter {
-                write!(f, ", ")?;
-                Debug::fmt(element, f)?;
-            }
-            write!(f, "]")
-        }
-    }
+    impl_debug!(dyn Error);
 
     declare_new_fn!(
+        #[cfg_attr(doc, doc(cfg(feature = "std")))]
         #[doc = concat!("(only available with the [`std` feature](https://docs.rs/crate/dyn-slice/", env!("CARGO_PKG_VERSION"),"/features))")]
         Seek,
         pub seek,
     );
     declare_new_fn!(
+        #[cfg_attr(doc, doc(cfg(feature = "std")))]
         #[doc = concat!("(only available with the [`std` feature](https://docs.rs/crate/dyn-slice/", env!("CARGO_PKG_VERSION"),"/features))")]
         Write,
         pub io_write,
     );
 }
 #[cfg(feature = "std")]
-pub use std_lib::*;
+pub use standard_std::*;
 
 #[cfg(test)]
 mod test {

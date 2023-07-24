@@ -10,11 +10,12 @@
 //!
 #![doc = concat!("There are more examples in the [examples directory](https://docs.rs/crate/dyn-slice/", env!("CARGO_PKG_VERSION"), "/source/examples/).")]
 //!
-//! # Standard dyn slice types
+//! # Standard new dyn slice functions
 //!
-//! There are some dyn slice declarations for common traits in [`standard`]
+//! There are some pre-made new functions for common traits in [`standard`]
 
 #![feature(ptr_metadata, pointer_byte_offsets)]
+#![cfg_attr(doc, feature(doc_cfg))]
 #![warn(
     clippy::all,
     clippy::pedantic,
@@ -52,13 +53,15 @@ pub use iter_mut::*;
 /// # Syntax
 ///
 /// Simple trait:  
-/// `declare_dyn_slice!(Trait, new_module_name);`
+/// `declare_new_fn!(Trait, new_module_name);`
 ///
 /// Trait with a given generic:  
-/// `declare_dyn_slice!(Trait:<Type>, new_module_name);`
+/// `declare_new_fn!(Trait:<Type>, new_module_name);`
 ///
 /// Trait with a generic:
-/// `declare_dyn_slice!(<T>, Trait:<T>, new_module_name);`
+/// `declare_new_fn!(<T>, Trait:<T>, new_module_name);`
+/// 
+/// Attributes can also be added before the other arguments.
 ///
 /// # Examples
 ///
@@ -96,6 +99,7 @@ macro_rules! declare_new_fn {
         $vis:vis $name:ident $(,)?
     ) => {
         #[doc = concat!("new functions for `&dyn [", stringify!($tr), "]`")]
+        $(#[ $meta ])*
         $vis mod $name {
             #[allow(unused_imports)]
             use super::*;
