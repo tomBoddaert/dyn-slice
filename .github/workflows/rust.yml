@@ -22,6 +22,7 @@ jobs:
         cargo clippy --all-targets --all-features
         cargo clippy --no-default-features
         cargo clippy --no-default-features --features="alloc"
+        cargo clippy --all-features -- -W clippy::unwrap_used -W clippy::expect_used
     - name: Build
       run: |
         cargo build --verbose

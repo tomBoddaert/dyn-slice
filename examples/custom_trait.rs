@@ -1,8 +1,7 @@
 // Enable the required features (nightly must be used)
 #![feature(ptr_metadata, pointer_byte_offsets)]
 
-// Remember to import the `DynSliceMethods` trait to use the methods!
-use dyn_slice::{declare_dyn_slice, DynSliceMethods};
+use dyn_slice::declare_new_fn;
 
 // Create our custom trait
 pub trait MyTrait {
@@ -32,15 +31,15 @@ impl MyTrait for u16 {
     }
 }
 
-// Declare and import the `&dyn [MyTrait]` type
-declare_dyn_slice!(MyTrait, my_trait_dyn_slice);
-use my_trait_dyn_slice::*;
+// Declare and import the `new` function
+declare_new_fn!(MyTrait, my_trait_dyn_slice);
+use my_trait_dyn_slice::new as new_dyn_slice;
 
 fn main() {
     let array: [u8; 4] = [1, 2, 3, 4];
 
     // Create the first dyn slice
-    let dyn_slice = DynSlice::new(&array);
+    let dyn_slice = new_dyn_slice(&array);
 
     // Get the first and last elements as u64
     let first = dyn_slice.first().map(MyTrait::to_u64);
@@ -51,7 +50,7 @@ fn main() {
     let array2: [u16; 3] = [5, 6, 7];
 
     // Create the second dyn slice
-    let dyn_slice2 = DynSlice::new(&array2);
+    let dyn_slice2 = new_dyn_slice(&array2);
 
     // Get the first and last elements as u64
     let first = dyn_slice2.first().map(MyTrait::to_u64);

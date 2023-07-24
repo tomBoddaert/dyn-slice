@@ -1,0 +1,20 @@
+error[E0597]: `array_1` does not live long enough
+ --> compile_fail_tests/lifetime_any.rs
+  |
+  |         let array_1 = [1, 2, 3, 4, 5];
+  |             ------- binding `array_1` declared here
+  |         let slice_1 = any::new(&array_1);
+  |                                ^^^^^^^^ borrowed value does not live long enough
+  |         slice_1.downcast::<i32>().unwrap()
+  |     };
+  |     - `array_1` dropped here while still borrowed
+
+error[E0597]: `slice_1` does not live long enough
+ --> compile_fail_tests/lifetime_any.rs
+  |
+  |         let slice_1 = any::new(&array_1);
+  |             ------- binding `slice_1` declared here
+  |         slice_1.downcast::<i32>().unwrap()
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^ borrowed value does not live long enough
+  |     };
+  |     - `slice_1` dropped here while still borrowed

@@ -1,0 +1,21 @@
+error[E0597]: `array_1` does not live long enough
+ --> compile_fail_tests/lifetime_2.rs
+  |
+  |         let array_1 = [1, 2, 3, 4, 5];
+  |             ------- binding `array_1` declared here
+  |         let slice_1 = borrow::new(&array_1);
+  |                                   ^^^^^^^^ borrowed value does not live long enough
+  |         slice_1.get(1).unwrap()
+  |         ----------------------- borrow later used here
+  |     };
+  |     - `array_1` dropped here while still borrowed
+
+error[E0597]: `slice_1` does not live long enough
+ --> compile_fail_tests/lifetime_2.rs
+  |
+  |         let slice_1 = borrow::new(&array_1);
+  |             ------- binding `slice_1` declared here
+  |         slice_1.get(1).unwrap()
+  |         ^^^^^^^^^^^^^^ borrowed value does not live long enough
+  |     };
+  |     - `slice_1` dropped here while still borrowed

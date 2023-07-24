@@ -1,27 +1,57 @@
 use core::{
+    marker::PhantomData,
     mem::transmute,
-    ops::RangeBounds,
+    ops::{Index, RangeBounds},
+    ptr,
     ptr::{DynMetadata, Pointee},
     slice,
 };
 
-/// Implementations for most methods for dyn slices.
-///
-/// **You should not need to implement this manually!**  
-/// It is implemented by the [`super::declare_dyn_slice`] macro.
-///
-/// # Safety
-/// Implementer must ensure that:
-/// - `vtable_ptr` yields a valid instance of `DynMetadata` transmuted for the type contained in the slice, or optionally null if and only if the slice is empty,
-/// - `metadata` yields a valid instance of `DynMetadata` for the type contained in the slice,
-//  - `len` yields the correct length of the underlying slice,
-/// - `as_ptr` yields the pointer to the start of the underlying slice,
-/// - the underlying slice has the same layout as [`[T]`](https://doc.rust-lang.org/reference/type-layout.html#slice-layout),
-/// - the implementing type must not live for longer than the underlying slice
-pub unsafe trait DynSliceMethods: Sized {
-    /// The unsized, dynamic type (`dyn $Trait`)
-    type Dyn: ?Sized + Pointee<Metadata = DynMetadata<Self::Dyn>>;
+use crate::Iter;
 
+#[derive(Clone, Copy)]
+/// `&dyn [Trait]`
+pub struct DynSlice<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> {
+    pub(crate) vtable_ptr: *const (),
+    pub(crate) len: usize,
+    pub(crate) data: *const (),
+    phantom: PhantomData<&'a Dyn>,
+}
+
+impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
+    #[inline]
+    #[must_use]
+    /// Construct a dyn slice given a slice and a vtable pointer.
+    ///
+    /// # Safety
+    /// Caller must ensure that `vtable_ptr` is a valid instance of `DynMetadata` for `DynSliceFromType` and `Dyn` transmuted, or optionally, a null pointer if `value.len() == 0`.
+    pub const unsafe fn with_vtable_ptr<DynSliceFromType>(
+        value: &'a [DynSliceFromType],
+        vtable_ptr: *const (),
+    ) -> Self {
+        Self {
+            vtable_ptr,
+            len: value.len(),
+            data: value.as_ptr().cast(),
+            phantom: PhantomData,
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    /// Construct a dyn slice given a slice and a `DynMetadata` instance.
+    ///
+    /// # Safety
+    /// Caller must ensure that `metadata` is a valid instance of `DynMetadata` for `DynSliceFromType` and `Dyn`.
+    pub const unsafe fn with_metadata<DynSliceFromType>(
+        value: &'a [DynSliceFromType],
+        metadata: DynMetadata<Dyn>,
+    ) -> Self {
+        Self::with_vtable_ptr(value, transmute(metadata))
+    }
+
+    #[inline]
+    #[must_use]
     /// Construct a dyn slice from raw parts.
     ///
     /// # Safety
@@ -30,8 +60,17 @@ pub unsafe trait DynSliceMethods: Sized {
     /// - `len` <= then length of the slice in memory from the `data` pointer,
     /// - `data` is a valid pointer to the slice,
     /// - the underlying slice is the same layout as [`[T]`](https://doc.rust-lang.org/reference/type-layout.html#slice-layout)
+    pub const unsafe fn from_parts(vtable_ptr: *const (), len: usize, data: *const ()) -> Self {
+        Self {
+            vtable_ptr,
+            len,
+            data,
+            phantom: PhantomData,
+        }
+    }
+
+    #[inline]
     #[must_use]
-    unsafe fn from_parts(vtable_ptr: *const (), len: usize, data: *const ()) -> Self;
     /// Construct a dyn slice from raw parts with a `DynMetadata` instance rather than a vtable pointer.
     ///
     /// # Safety
@@ -40,84 +79,83 @@ pub unsafe trait DynSliceMethods: Sized {
     /// - `len` <= then length of the slice in memory from the `data` pointer,
     /// - `data` is a valid pointer to the slice,
     /// - the underlying slice is the same layout as [`[T]`](https://doc.rust-lang.org/reference/type-layout.html#slice-layout)
-    #[must_use]
-    unsafe fn from_parts_with_metadata(
-        metadata: DynMetadata<Self::Dyn>,
+    pub unsafe fn from_parts_with_metadata(
+        metadata: DynMetadata<Dyn>,
         len: usize,
         data: *const (),
     ) -> Self {
         Self::from_parts(transmute(metadata), len, data)
     }
 
+    #[inline]
+    #[must_use]
     /// Get the vtable pointer, which may be null if the slice is empty.
-    fn vtable_ptr(&self) -> *const ();
+    pub const fn vtable_ptr(&self) -> *const () {
+        self.vtable_ptr
+    }
+
+    #[inline]
+    #[must_use]
     /// Get the metadata component of the element's pointers, or possibly `None` if the slice is empty.
-    fn metadata(&self) -> Option<DynMetadata<Self::Dyn>> {
+    pub fn metadata(&self) -> Option<DynMetadata<Dyn>> {
         let vtable_ptr = self.vtable_ptr();
         (!vtable_ptr.is_null()).then(|| unsafe { transmute(vtable_ptr) })
     }
+
+    #[inline]
+    #[must_use]
     /// Returns the number of elements in the slice.
-    fn len(&self) -> usize;
+    pub const fn len(&self) -> usize {
+        self.len
+    }
+
+    #[inline]
+    #[must_use]
     /// Returns a pointer to the underlying slice, which may be null if the slice is empty.
-    fn as_ptr(&self) -> *const ();
+    pub const fn as_ptr(&self) -> *const () {
+        self.data
+    }
 
     #[inline]
     #[must_use]
     /// Returns `true` if the slice has a length of 0.
-    fn is_empty(&self) -> bool {
-        self.len() == 0
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
     }
 
     #[must_use]
     /// Returns a reference to the first element of the slice, or `None` if it is empty.
-    fn first(&self) -> Option<&Self::Dyn> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(unsafe {
-                core::ptr::from_raw_parts::<Self::Dyn>(self.as_ptr(), transmute(self.vtable_ptr()))
-                    .as_ref()
-                    .unwrap()
-            })
-        }
+    pub fn first(&self) -> Option<&Dyn> {
+        (!self.is_empty()).then(|| unsafe {
+            &*ptr::from_raw_parts::<Dyn>(self.as_ptr(), transmute(self.vtable_ptr()))
+        })
     }
 
     #[must_use]
     /// Returns a reference to the last element of the slice, or `None` if it is empty.
-    fn last(&self) -> Option<&Self::Dyn> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(unsafe { self.get_unchecked(self.len() - 1) })
-        }
+    pub fn last(&self) -> Option<&Dyn> {
+        (!self.is_empty()).then(|| unsafe { self.get_unchecked(self.len - 1) })
     }
 
     #[must_use]
     /// Returns a reference to the element at the given `index` or `None` if the `index` is out of bounds.
-    fn get(&self, index: usize) -> Option<&Self::Dyn> {
-        if index >= self.len() {
-            None
-        } else {
-            Some(unsafe { self.get_unchecked(index) })
-        }
+    pub fn get(&self, index: usize) -> Option<&Dyn> {
+        (index < self.len).then(|| unsafe { self.get_unchecked(index) })
     }
 
+    #[inline]
     #[must_use]
     /// Returns a reference to the element at the given `index`, without doing bounds checking.
     ///
     /// # Safety
     /// The caller must ensure that index < self.len()
     /// Calling this on an empty dyn Slice will result in a segfault!
-    unsafe fn get_unchecked(&self, index: usize) -> &Self::Dyn {
-        let metadata = transmute::<_, DynMetadata<Self::Dyn>>(self.vtable_ptr());
-        core::ptr::from_raw_parts::<Self::Dyn>(
-            self.as_ptr().byte_add(metadata.size_of() * index),
-            metadata,
-        )
-        .as_ref()
-        .unwrap()
+    pub unsafe fn get_unchecked(&self, index: usize) -> &Dyn {
+        let metadata = transmute::<_, DynMetadata<Dyn>>(self.vtable_ptr());
+        &*ptr::from_raw_parts::<Dyn>(self.as_ptr().byte_add(metadata.size_of() * index), metadata)
     }
 
+    #[inline]
     #[must_use]
     /// Get a sub-slice from the `start` index with the `len`, without doing bounds checking.
     ///
@@ -125,8 +163,9 @@ pub unsafe trait DynSliceMethods: Sized {
     /// Caller must ensure that:
     /// - `start` < `self.len()`
     /// - `len` <= `self.len() - start`
-    unsafe fn slice_unchecked(&self, start: usize, len: usize) -> Self {
-        let metadata = transmute::<_, DynMetadata<Self::Dyn>>(self.vtable_ptr());
+    pub unsafe fn slice_unchecked(&self, start: usize, len: usize) -> DynSlice<Dyn> {
+        // NOTE: DO NOT MAKE THIS FUNCTION RETURN `Self` as `Self` comes with an incorrect lifetime
+        let metadata = transmute::<_, DynMetadata<Dyn>>(self.vtable_ptr());
         Self::from_parts_with_metadata(
             metadata,
             len,
@@ -136,7 +175,8 @@ pub unsafe trait DynSliceMethods: Sized {
 
     #[must_use]
     /// Returns a sub-slice from the `start` index with the `len` or `None` if the slice is out of bounds.
-    fn slice<R: RangeBounds<usize>>(&self, range: R) -> Option<Self> {
+    pub fn slice<R: RangeBounds<usize>>(&self, range: R) -> Option<DynSlice<Dyn>> {
+        // NOTE: DO NOT MAKE THIS FUNCTION RETURN `Self` as `Self` comes with an incorrect lifetime
         use core::ops::Bound;
 
         let start_inclusive = match range.start_bound() {
@@ -148,10 +188,10 @@ pub unsafe trait DynSliceMethods: Sized {
         let end_exclusive = match range.end_bound() {
             Bound::Included(i) => i.checked_add(1)?,
             Bound::Excluded(i) => *i,
-            Bound::Unbounded => self.len(),
+            Bound::Unbounded => self.len,
         };
 
-        if end_exclusive > self.len() {
+        if end_exclusive > self.len {
             return None;
         }
 
@@ -160,19 +200,20 @@ pub unsafe trait DynSliceMethods: Sized {
         Some(unsafe { self.slice_unchecked(start_inclusive, len) })
     }
 
+    #[inline]
     #[must_use]
     /// Returns the underlying slice as `&[T]`.
     ///
     /// # Safety
     /// The caller must ensure that the underlying slice is of type `[T]`.
-    unsafe fn downcast_unchecked<T>(&self) -> &[T] {
-        slice::from_raw_parts(self.as_ptr().cast(), self.len())
+    pub const unsafe fn downcast_unchecked<T>(&self) -> &[T] {
+        slice::from_raw_parts(self.as_ptr().cast(), self.len)
     }
 
     #[inline]
     #[must_use]
     /// Returns an iterator over the slice.
-    fn iter(&self) -> Iter<Self> {
+    pub const fn iter(&'a self) -> Iter<'a, Dyn> {
         Iter {
             slice: self,
             next_index: 0,
@@ -180,77 +221,64 @@ pub unsafe trait DynSliceMethods: Sized {
     }
 }
 
-#[derive(Clone)]
-/// Dyn slice iterator
-pub struct Iter<'a, DS: DynSliceMethods + 'a> {
-    slice: &'a DS,
-    next_index: usize,
-}
+impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> Index<usize> for DynSlice<'a, Dyn> {
+    type Output = Dyn;
 
-impl<'a, DS: DynSliceMethods + 'a> Iterator for Iter<'a, DS> {
-    type Item = &'a DS::Dyn;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.next_index == self.slice.len() {
-            None
-        } else {
-            let element = unsafe { self.slice.get_unchecked(self.next_index) };
-            self.next_index += 1;
-
-            Some(element)
-        }
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.slice.len() - self.next_index;
-        (remaining, Some(remaining))
-    }
-
-    #[inline]
-    fn count(self) -> usize {
-        self.slice.len() - self.next_index
-    }
-
-    fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        let index = self.next_index + n;
-        if index >= self.slice.len() {
-            self.next_index = self.slice.len();
-            return None;
-        }
-
-        self.next_index = index;
-        self.next()
-    }
-
-    fn last(self) -> Option<Self::Item> {
-        if self.next_index == self.slice.len() {
-            None
-        } else {
-            self.slice.last()
-        }
+    fn index(&self, index: usize) -> &Self::Output {
+        assert!(index < self.len, "index out of bounds");
+        unsafe { self.get_unchecked(index) }
     }
 }
-
-impl<'a, DS: DynSliceMethods + 'a> core::iter::FusedIterator for Iter<'a, DS> {}
-impl<'a, DS: DynSliceMethods + 'a> ExactSizeIterator for Iter<'a, DS> {}
 
 #[cfg(test)]
 mod test {
-    use core::ptr::addr_of;
+    use core::{fmt::Display, ptr::addr_of};
 
-    use crate::standard::PartialEqDynSlice;
+    use crate::{declare_new_fn, standard::partial_eq, DynSlice};
 
-    use super::DynSliceMethods;
+    declare_new_fn!(Display, display_dyn_slice);
+    pub use display_dyn_slice::new as new_display_dyn_slice;
+
+    #[test]
+    fn create_dyn_slice() {
+        let array: [u8; 5] = [1, 2, 3, 4, 5];
+
+        let dyn_slice = new_display_dyn_slice(&array);
+
+        assert_eq!(dyn_slice.len(), array.len());
+        assert!(!dyn_slice.is_empty());
+
+        for (i, x) in array.iter().enumerate() {
+            assert_eq!(
+                format!(
+                    "{}",
+                    dyn_slice
+                        .get(i)
+                        .expect("failed to get an element of dyn_slice")
+                ),
+                format!("{x}"),
+            );
+        }
+    }
+
+    #[test]
+    fn empty() {
+        let array: [u8; 0] = [];
+
+        let dyn_slice = new_display_dyn_slice(&array);
+
+        assert_eq!(dyn_slice.len(), 0);
+        assert!(dyn_slice.is_empty());
+    }
 
     #[test]
     fn test_slice() {
         let array = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-        let slice = PartialEqDynSlice::new(&array);
+        let slice = partial_eq::new(&array);
         assert_eq!(slice.len(), array.len());
 
         // Slices equal to the original slice
-        let full_slices = [
+        let full_slices: [DynSlice<dyn PartialEq<i32>>; 6] = [
             slice.slice(..).unwrap(),
             slice.slice(0..).unwrap(),
             slice.slice(..(array.len())).unwrap(),
