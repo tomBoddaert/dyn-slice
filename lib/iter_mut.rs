@@ -8,7 +8,7 @@ use crate::DynSliceMut;
 
 /// Mutable dyn slice iterator
 pub struct IterMut<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>> + 'a> {
-    pub(crate) slice: &'a mut DynSliceMut<'a, Dyn>,
+    pub(crate) slice: DynSliceMut<'a, Dyn>,
     pub(crate) next_index: usize,
 }
 
@@ -50,11 +50,13 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>> + 'a> Iterator for I
         self.next()
     }
 
-    fn last(self) -> Option<Self::Item> {
+    fn last(mut self) -> Option<Self::Item> {
         if self.next_index == self.slice.len() {
             None
         } else {
-            self.slice.last_mut()
+            // The lifetime can be extended because the data will not
+            // be accessed again until the iterator's lifetime expires
+            unsafe { transmute(self.slice.last_mut()) }
         }
     }
 }

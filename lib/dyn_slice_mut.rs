@@ -192,7 +192,7 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
     /// Returns a mutable iterator over the slice.
     pub fn iter_mut(&'a mut self) -> IterMut<'a, Dyn> {
         IterMut {
-            slice: self,
+            slice: unsafe { self.slice_unchecked_mut(0, self.len) },
             next_index: 0,
         }
     }
@@ -213,6 +213,18 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> IndexMut<usize>
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         assert!(index < self.0.len, "index out of bounds");
         unsafe { self.get_unchecked_mut(index) }
+    }
+}
+
+impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> IntoIterator for DynSliceMut<'a, Dyn> {
+    type IntoIter = IterMut<'a, Dyn>;
+    type Item = &'a mut Dyn;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IterMut {
+            slice: self,
+            next_index: 0,
+        }
     }
 }
 

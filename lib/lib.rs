@@ -60,7 +60,8 @@ pub use iter_mut::*;
 ///
 /// Trait with a generic:
 /// `declare_new_fn!(<T>, Trait:<T>, new_module_name);`
-/// 
+///
+/// A visibility qualifier can be added before the module name.
 /// Attributes can also be added before the other arguments.
 ///
 /// # Examples

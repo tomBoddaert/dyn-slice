@@ -1,5 +1,6 @@
 use core::{
     iter::FusedIterator,
+    mem::transmute,
     ptr::{DynMetadata, Pointee},
 };
 
@@ -8,7 +9,7 @@ use crate::DynSlice;
 #[derive(Clone)]
 /// Dyn slice iterator
 pub struct Iter<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>> + 'a> {
-    pub(crate) slice: &'a DynSlice<'a, Dyn>,
+    pub(crate) slice: DynSlice<'a, Dyn>,
     pub(crate) next_index: usize,
 }
 
@@ -22,7 +23,9 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>> + 'a> Iterator for I
             let element = unsafe { self.slice.get_unchecked(self.next_index) };
             self.next_index += 1;
 
-            Some(element)
+            // The lifetime can be extended because the data will not
+            // be accessed again until the iterator's lifetime expires
+            Some(unsafe { transmute(element) })
         }
     }
 
@@ -52,7 +55,9 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>> + 'a> Iterator for I
         if self.next_index == self.slice.len() {
             None
         } else {
-            self.slice.last()
+            // The lifetime can be extended because the data will not
+            // be accessed again until the iterator's lifetime expires
+            unsafe { transmute(self.slice.last()) }
         }
     }
 }

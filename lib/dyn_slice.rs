@@ -9,7 +9,6 @@ use core::{
 
 use crate::Iter;
 
-#[derive(Clone, Copy)]
 /// `&dyn [Trait]`
 pub struct DynSlice<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> {
     pub(crate) vtable_ptr: *const (),
@@ -17,6 +16,13 @@ pub struct DynSlice<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> {
     pub(crate) data: *const (),
     phantom: PhantomData<&'a Dyn>,
 }
+
+impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> Clone for DynSlice<'a, Dyn> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> Copy for DynSlice<'a, Dyn> {}
 
 impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
     #[inline]
@@ -215,7 +221,7 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
     /// Returns an iterator over the slice.
     pub const fn iter(&'a self) -> Iter<'a, Dyn> {
         Iter {
-            slice: self,
+            slice: *self,
             next_index: 0,
         }
     }
@@ -227,6 +233,18 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> Index<usize> for Dy
     fn index(&self, index: usize) -> &Self::Output {
         assert!(index < self.len, "index out of bounds");
         unsafe { self.get_unchecked(index) }
+    }
+}
+
+impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> IntoIterator for DynSlice<'a, Dyn> {
+    type IntoIter = Iter<'a, Dyn>;
+    type Item = &'a Dyn;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Iter {
+            slice: self,
+            next_index: 0,
+        }
     }
 }
 

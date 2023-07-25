@@ -9,29 +9,12 @@ use core::{
         AddAssign, BitAndAssign, BitOrAssign, BitXorAssign, DivAssign, MulAssign, RemAssign,
         ShlAssign, ShrAssign, SubAssign,
     },
+    ptr::{DynMetadata, Pointee},
 };
 
 use crate::DynSliceMut;
 
 use super::{declare_new_fn, DynSlice};
-
-macro_rules! impl_debug {
-    ( $( $t:ty ),* ) => {
-        $(
-            impl<'a> Debug for DynSlice<'a, $t> {
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    f.debug_list().entries(self.iter()).finish()
-                }
-            }
-            impl<'a> Debug for $crate::DynSliceMut<'a, $t> {
-                #[inline]
-                fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                    self.0.fmt(f)
-                }
-            }
-        )*
-    };
-}
 
 declare_new_fn!(Any, pub any);
 macro_rules! impl_any_methods {
@@ -61,7 +44,6 @@ macro_rules! impl_any_methods {
     };
 }
 impl_any_methods!(dyn Any, dyn Any + Send, dyn Any + Sync + Send);
-impl_debug!(dyn Any, dyn Any + Send, dyn Any + Sync + Send);
 
 declare_new_fn!(<T>, AsRef:<T>, pub as_ref);
 declare_new_fn!(<T>, AsMut:<T>, pub as_mut);
@@ -70,7 +52,9 @@ declare_new_fn!(<Borrowed>, Borrow:<Borrowed>, pub borrow);
 declare_new_fn!(<Borrowed>, BorrowMut:<Borrowed>, pub borrow_mut);
 
 declare_new_fn!(<Rhs>, PartialEq:<Rhs>, pub partial_eq);
-impl<'a, Rhs> PartialEq<[Rhs]> for DynSlice<'a, dyn PartialEq<Rhs>> {
+impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + PartialEq<Rhs> + ?Sized, Rhs> PartialEq<[Rhs]>
+    for DynSlice<'a, Dyn>
+{
     fn eq(&self, other: &[Rhs]) -> bool {
         if self.len() != other.len() {
             return false;
@@ -79,7 +63,9 @@ impl<'a, Rhs> PartialEq<[Rhs]> for DynSlice<'a, dyn PartialEq<Rhs>> {
         self.iter().zip(other.iter()).all(|(a, b)| a == b)
     }
 }
-impl<'a, Rhs> PartialEq<[Rhs]> for DynSliceMut<'a, dyn PartialEq<Rhs>> {
+impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + PartialEq<Rhs> + ?Sized, Rhs> PartialEq<[Rhs]>
+    for DynSliceMut<'a, Dyn>
+{
     #[inline]
     fn eq(&self, other: &[Rhs]) -> bool {
         self.0.eq(other)
@@ -87,32 +73,37 @@ impl<'a, Rhs> PartialEq<[Rhs]> for DynSliceMut<'a, dyn PartialEq<Rhs>> {
 }
 
 declare_new_fn!(<Rhs>, PartialOrd:<Rhs>, pub partial_ord);
-impl<'a, Rhs> PartialEq<[Rhs]> for DynSlice<'a, dyn PartialOrd<Rhs>> {
-    fn eq(&self, other: &[Rhs]) -> bool {
-        if self.len() != other.len() {
-            return false;
-        }
-
-        self.iter().zip(other.iter()).all(|(a, b)| a == b)
-    }
-}
-impl<'a, Rhs> PartialEq<[Rhs]> for DynSliceMut<'a, dyn PartialOrd<Rhs>> {
-    #[inline]
-    fn eq(&self, other: &[Rhs]) -> bool {
-        self.0.eq(other)
-    }
-}
 
 declare_new_fn!(Binary, pub binary);
 
 declare_new_fn!(Debug, pub debug);
-impl_debug!(dyn Debug);
+impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + Debug + ?Sized> Debug for DynSlice<'a, Dyn> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
+    }
+}
+impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + Debug + ?Sized> Debug
+    for DynSliceMut<'a, Dyn>
+{
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <DynSlice<Dyn> as Debug>::fmt(&self.0, f)
+    }
+}
 
 declare_new_fn!(Display, pub display);
 declare_new_fn!(LowerExp, pub lower_exp);
 declare_new_fn!(LowerHex, pub lower_hex);
 declare_new_fn!(Octal, pub octal);
+
 declare_new_fn!(Pointer, pub pointer);
+impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + ?Sized> Pointer for DynSlice<'a, Dyn> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <*const () as Pointer>::fmt(&self.data, f)
+    }
+}
+
 declare_new_fn!(UpperExp, pub upper_exp);
 declare_new_fn!(UpperHex, pub upper_hex);
 declare_new_fn!(Write, pub write);
@@ -163,13 +154,12 @@ pub use standard_alloc::*;
 
 #[cfg(feature = "std")]
 mod standard_std {
-    use core::fmt::{self, Debug};
     use std::{
         error::Error,
         io::{Seek, Write},
     };
 
-    use crate::{declare_new_fn, DynSlice};
+    use crate::declare_new_fn;
 
     declare_new_fn!(
         #[cfg_attr(doc, doc(cfg(feature = "std")))]
@@ -177,7 +167,7 @@ mod standard_std {
         Error,
         pub error,
     );
-    impl_debug!(dyn Error);
+    // impl_debug!(dyn Error);
 
     declare_new_fn!(
         #[cfg_attr(doc, doc(cfg(feature = "std")))]
