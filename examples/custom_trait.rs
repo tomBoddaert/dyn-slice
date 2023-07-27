@@ -64,3 +64,9 @@ fn main() {
         println!("sum {}: {}", i + 1, a.add(b.to_u64()));
     }
 }
+
+// Test the example (this can be ignored)
+#[test]
+fn test() {
+    main()
+}

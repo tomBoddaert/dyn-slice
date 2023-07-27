@@ -1,7 +1,7 @@
 use core::{
     marker::PhantomData,
     mem::transmute,
-    ops::{Index, RangeBounds},
+    ops::{Bound, Index, RangeBounds},
     ptr,
     ptr::{DynMetadata, Pointee},
     slice,
@@ -105,7 +105,13 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
     /// Get the metadata component of the element's pointers, or possibly `None` if the slice is empty.
     pub fn metadata(&self) -> Option<DynMetadata<Dyn>> {
         let vtable_ptr = self.vtable_ptr();
-        (!vtable_ptr.is_null()).then(|| unsafe { transmute(vtable_ptr) })
+        (!vtable_ptr.is_null()).then(|| {
+            // SAFETY:
+            // DynMetadata only contains a single pointer, and has the same layout as *const ().
+            // The statement above guarantees that the pointer is not null and so, the pointer is
+            // guaranteed to point to a vtable by the safe methods that create the slice.
+            unsafe { transmute(vtable_ptr) }
+        })
     }
 
     #[inline]
@@ -132,21 +138,42 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
     #[must_use]
     /// Returns a reference to the first element of the slice, or `None` if it is empty.
     pub fn first(&self) -> Option<&Dyn> {
-        (!self.is_empty()).then(|| unsafe {
-            &*ptr::from_raw_parts::<Dyn>(self.as_ptr(), transmute(self.vtable_ptr()))
+        (!self.is_empty()).then(|| {
+            debug_assert!(
+                !self.vtable_ptr.is_null(),
+                "[dyn-slice] vtable pointer is null on access!"
+            );
+
+            // SAFETY:
+            // The above statement ensures that slice is not empty, and
+            // therefore has a first (index 0) element and a valid vtable pointer,
+            // which can be transmuted to DynMetadata it contains a single pointer,
+            // and has the same layout as *const ().
+            unsafe { &*ptr::from_raw_parts::<Dyn>(self.as_ptr(), transmute(self.vtable_ptr())) }
         })
     }
 
     #[must_use]
     /// Returns a reference to the last element of the slice, or `None` if it is empty.
     pub fn last(&self) -> Option<&Dyn> {
-        (!self.is_empty()).then(|| unsafe { self.get_unchecked(self.len - 1) })
+        (!self.is_empty()).then(|| {
+            // SAFETY:
+            // The above statement ensures that slice is not empty, and
+            // therefore has a last (index len - 1) element and a valid vtable pointer.
+            unsafe { self.get_unchecked(self.len - 1) }
+        })
     }
 
     #[must_use]
     /// Returns a reference to the element at the given `index` or `None` if the `index` is out of bounds.
     pub fn get(&self, index: usize) -> Option<&Dyn> {
-        (index < self.len).then(|| unsafe { self.get_unchecked(index) })
+        (index < self.len).then(|| {
+            // SAFETY:
+            // The above inequality ensures that the index is less than the
+            // length, and is therefore valid. This also ensures that the slice
+            // has a valid vtable pointer because the slice guaranteed to not be empty.
+            unsafe { self.get_unchecked(index) }
+        })
     }
 
     #[inline]
@@ -157,6 +184,15 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
     /// The caller must ensure that index < self.len()
     /// Calling this on an empty dyn Slice will result in a segfault!
     pub unsafe fn get_unchecked(&self, index: usize) -> &Dyn {
+        debug_assert!(
+            index < self.len,
+            "[dyn-slice] index is greater than length!"
+        );
+        debug_assert!(
+            !self.vtable_ptr.is_null(),
+            "[dyn-slice] vtable pointer is null on access!"
+        );
+
         let metadata = transmute::<_, DynMetadata<Dyn>>(self.vtable_ptr());
         &*ptr::from_raw_parts::<Dyn>(self.as_ptr().byte_add(metadata.size_of() * index), metadata)
     }
@@ -171,6 +207,11 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
     /// - `len` <= `self.len() - start`
     pub unsafe fn slice_unchecked(&self, start: usize, len: usize) -> DynSlice<Dyn> {
         // NOTE: DO NOT MAKE THIS FUNCTION RETURN `Self` as `Self` comes with an incorrect lifetime
+        debug_assert!(
+            start + len <= self.len,
+            "[dyn-slice] sub-slice is out of bounds!"
+        );
+
         let metadata = transmute::<_, DynMetadata<Dyn>>(self.vtable_ptr());
         Self::from_parts_with_metadata(
             metadata,
@@ -183,7 +224,6 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
     /// Returns a sub-slice from the `start` index with the `len` or `None` if the slice is out of bounds.
     pub fn slice<R: RangeBounds<usize>>(&self, range: R) -> Option<DynSlice<Dyn>> {
         // NOTE: DO NOT MAKE THIS FUNCTION RETURN `Self` as `Self` comes with an incorrect lifetime
-        use core::ops::Bound;
 
         let start_inclusive = match range.start_bound() {
             Bound::Included(i) => *i,
@@ -203,6 +243,10 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
 
         let len = end_exclusive.checked_sub(start_inclusive)?;
 
+        // SAFETY:
+        // The above `if` statement ensures that the the end of the new slice
+        // does not exceed that of the original slice, therefore, the new
+        // slice is valid.
         Some(unsafe { self.slice_unchecked(start_inclusive, len) })
     }
 
@@ -232,6 +276,15 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> Index<usize> for Dy
 
     fn index(&self, index: usize) -> &Self::Output {
         assert!(index < self.len, "index out of bounds");
+        debug_assert!(
+            !self.vtable_ptr.is_null(),
+            "[dyn-slice] vtable pointer is null on access!"
+        );
+
+        // SAFETY:
+        // The above assertion ensures that the index is less than the
+        // length, and is therefore valid. This also ensures that the slice
+        // has a valid vtable pointer because the slice guaranteed to not be empty.
         unsafe { self.get_unchecked(index) }
     }
 }

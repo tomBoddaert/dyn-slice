@@ -51,3 +51,9 @@ fn main() {
         println!("{n}");
     }
 }
+
+// Test the example (this can be ignored)
+#[test]
+fn test() {
+    main()
+}

@@ -20,11 +20,17 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>> + 'a> Iterator for I
         if self.next_index == self.slice.len() {
             None
         } else {
+            // SAFETY:
+            // As the index is incremented by this method only, and it is checked to make sure
+            // it is not equal to the length, the index is guaranteed to be less than the length
+            // and therefore, valid. This also ensures that the slice
+            // has a valid vtable pointer because the slice guaranteed to not be empty.
             let element = unsafe { self.slice.get_unchecked(self.next_index) };
             self.next_index += 1;
 
-            // The lifetime can be extended because the data will not
-            // be accessed again until the iterator's lifetime expires
+            // SAFETY:
+            // The data is guaranteed to live for at least 'a, and not have a mutable reference to it
+            // in that time, so the lifetime can be extended.
             Some(unsafe { transmute(element) })
         }
     }
@@ -55,8 +61,9 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>> + 'a> Iterator for I
         if self.next_index == self.slice.len() {
             None
         } else {
-            // The lifetime can be extended because the data will not
-            // be accessed again until the iterator's lifetime expires
+            // SAFETY:
+            // The data is guaranteed to live for at least 'a, and not have a mutable reference to it
+            // in that time, so the lifetime can be extended.
             unsafe { transmute(self.slice.last()) }
         }
     }

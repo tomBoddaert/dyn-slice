@@ -29,7 +29,8 @@
     clippy::panic_in_result_fn,
     clippy::pub_without_shorthand,
     clippy::redundant_type_annotations,
-    clippy::todo
+    clippy::todo,
+    clippy::undocumented_unsafe_blocks
 )]
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -121,6 +122,9 @@ macro_rules! declare_new_fn {
                     ptr::{metadata, null}
                 };
 
+                // SAFETY:
+                // DynMetadata contains a single pointer to the vtable, and the layout is the same as *const (),
+                // so it can be transmuted.
                 unsafe {
                     // Get the dyn metadata from the first element of value
                     // If value is empty, the metadata should never be accessed, so set it to a null pointer
@@ -153,6 +157,9 @@ macro_rules! declare_new_fn {
                     ptr::{metadata, null}
                 };
 
+                // SAFETY:
+                // DynMetadata contains a single pointer to the vtable, and the layout is the same as *const (),
+                // so it can be transmuted.
                 unsafe {
                     // Get the dyn metadata from the first element of value
                     // If value is empty, the metadata should never be accessed, so set it to a null pointer

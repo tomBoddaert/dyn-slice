@@ -16,7 +16,15 @@ use crate::DynSliceMut;
 
 use super::{declare_new_fn, DynSlice};
 
-declare_new_fn!(Any, pub any);
+declare_new_fn!(
+    ///
+    /// `DynSlice(Mut)<dyn Any>`, `DynSlice(Mut)<dyn Any + Send>` and `DynSlice(Mut)<dyn Any + Send + Sync>` have a few extra methods:
+    /// - [`DynSlice::is`]
+    /// - [`DynSlice::downcast`]
+    /// - [`DynSliceMut::downcast_mut`]
+    Any,
+    pub any
+);
 macro_rules! impl_any_methods {
     ( $( $t:ty ),* ) => {
         $(
@@ -30,14 +38,24 @@ macro_rules! impl_any_methods {
                 /// Returns the underlying slice as `&[T]`, or `None` if the underlying slice is not of type `T`.
                 #[must_use]
                 pub fn downcast<T: 'static>(&self) -> Option<&[T]> {
-                    unsafe { self.is::<T>().then(|| self.downcast_unchecked()) }
+                    self.is::<T>().then(|| {
+                        // SAFETY:
+                        // The above line guarantees that the underlying slice is of type `T`,
+                        // so the downcast is valid.
+                        unsafe { self.downcast_unchecked() }
+                    })
                 }
             }
             impl<'a> DynSliceMut<'a, $t> {
                 /// Returns the underlying slice as `&mut [T]`, or `None` if the underlying slice is not of type `T`.
                 #[must_use]
                 pub fn downcast_mut<T: 'static>(&mut self) -> Option<&mut [T]> {
-                    unsafe { self.is::<T>().then(|| self.downcast_unchecked_mut()) }
+                    self.0.is::<T>().then(|| {
+                        // SAFETY:
+                        // The above line guarantees that the underlying slice is of type `T`,
+                        // so the downcast is valid.
+                        unsafe { self.downcast_unchecked_mut() }
+                    })
                 }
             }
         )*
@@ -167,7 +185,6 @@ mod standard_std {
         Error,
         pub error,
     );
-    // impl_debug!(dyn Error);
 
     declare_new_fn!(
         #[cfg_attr(doc, doc(cfg(feature = "std")))]
@@ -329,8 +346,11 @@ mod test {
 
         assert_eq!(a, b);
 
-        let array: [NonZeroU8; 2] =
-            unsafe { [NonZeroU8::new_unchecked(5), NonZeroU8::new_unchecked(7)] };
+        let array: [NonZeroU8; 2] = {
+            // SAFETY:
+            // NonZeroU8 has the same layout as u8, and can therefore be transmuted.
+            unsafe { [NonZeroU8::new_unchecked(5), NonZeroU8::new_unchecked(7)] }
+        };
         let slice = to::new::<u8, _>(&array);
 
         for (i, y) in array.iter().enumerate() {
