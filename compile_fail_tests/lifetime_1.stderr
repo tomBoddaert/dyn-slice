@@ -1,0 +1,11 @@
+error[E0597]: `array_2` does not live long enough
+ --> compile_fail_tests/lifetime_1.rs
+  |
+  |     let slice_2 = {
+  |         ------- borrow later stored here
+  |         let array_2 = [6, 7, 8, 9, 10];
+  |             ------- binding `array_2` declared here
+  |         borrow::new(&array_2)
+  |                     ^^^^^^^^ borrowed value does not live long enough
+  |     };
+  |     - `array_2` dropped here while still borrowed

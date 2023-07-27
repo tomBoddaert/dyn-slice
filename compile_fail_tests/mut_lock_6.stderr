@@ -1,0 +1,11 @@
+error[E0502]: cannot borrow `slice_1` as immutable because it is also borrowed as mutable
+ --> compile_fail_tests/mut_lock_6.rs
+  |
+  |     let mut a = slice_1.iter_mut();
+  |                 ------------------ mutable borrow occurs here
+  |
+  |     let _ = slice_1.get(1).unwrap().borrow();
+  |             ^^^^^^^^^^^^^^ immutable borrow occurs here
+  |
+  |     a.next().unwrap().borrow();
+  |     -------- mutable borrow later used here
