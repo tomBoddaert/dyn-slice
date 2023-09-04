@@ -110,7 +110,7 @@ macro_rules! declare_new_fn {
             #[allow(unused)]
             #[must_use]
             /// Create a dyn slice from a slice
-            pub fn new<'a, $($( $gen ,)*)? DynSliceFromType: Trait $(< $($trgen),* >)?>(value: &'a [DynSliceFromType]) -> $crate::DynSlice<dyn Trait $(< $($trgen),* >)?>
+            pub fn new<'a, $($( $gen ,)*)? DynSliceFromType: Trait $(< $($trgen),* >)? + 'static>(value: &'a [DynSliceFromType]) -> $crate::DynSlice<dyn Trait $(< $($trgen),* >)?>
             where
                 dyn Trait $(< $($trgen),* >)?: core::ptr::Pointee<Metadata = core::ptr::DynMetadata<dyn Trait $(< $($trgen),* >)?>>,
                 $($(
@@ -131,10 +131,7 @@ macro_rules! declare_new_fn {
                     let vtable_ptr = value.get(0).map_or(
                         null::<()>(),
                         |example| {
-                            transmute(metadata(transmute::<
-                                _,
-                                &'static dyn Trait $(< $($trgen),* >)?
-                            >(example as &dyn Trait $(< $($trgen),* >)?)))
+                            transmute(metadata(example as &dyn Trait $(< $($trgen),* >)?))
                         }
                     );
 
@@ -145,7 +142,7 @@ macro_rules! declare_new_fn {
             #[allow(unused)]
             #[must_use]
             /// Create a mutable dyn slice from a mutable slice
-            pub fn new_mut<'a, $($( $gen ,)*)? DynSliceFromType: Trait $(< $($trgen),* >)?>(value: &'a mut [DynSliceFromType]) -> $crate::DynSliceMut<dyn Trait $(< $($trgen),* >)?>
+            pub fn new_mut<'a, $($( $gen ,)*)? DynSliceFromType: Trait $(< $($trgen),* >)? + 'static>(value: &'a mut [DynSliceFromType]) -> $crate::DynSliceMut<dyn Trait $(< $($trgen),* >)?>
             where
                 dyn Trait $(< $($trgen),* >)?: core::ptr::Pointee<Metadata = core::ptr::DynMetadata<dyn Trait $(< $($trgen),* >)?>>,
                 $($(
@@ -166,10 +163,7 @@ macro_rules! declare_new_fn {
                     let vtable_ptr = value.get(0).map_or(
                         null::<()>(),
                         |example| {
-                            transmute(metadata(transmute::<
-                                _,
-                                &'static dyn Trait $(< $($trgen),* >)?
-                            >(example as &dyn Trait $(< $($trgen),* >)?)))
+                            transmute(metadata(example as &dyn Trait $(< $($trgen),* >)?))
                         }
                     );
 
