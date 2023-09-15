@@ -100,7 +100,7 @@ macro_rules! declare_new_fn {
         $tr:path $( :<$( $trgen:ident ),*> )?,
         $vis:vis $name:ident $(,)?
     ) => {
-        #[doc = concat!("new functions for `&dyn [", stringify!($tr), "]`")]
+        #[doc = concat!("new functions for `&dyn [`[`", stringify!($tr), "`]`]`")]
         $(#[ $meta ])*
         $vis mod $name {
             #[allow(unused_imports)]
@@ -109,7 +109,7 @@ macro_rules! declare_new_fn {
 
             #[allow(unused)]
             #[must_use]
-            /// Create a dyn slice from a slice
+            #[doc = concat!("Create a dyn slice from a slice of a type that implements [`", stringify!($tr), "`]")]
             pub fn new<'a, $($( $gen ,)*)? DynSliceFromType: Trait $(< $($trgen),* >)? + 'static>(value: &'a [DynSliceFromType]) -> $crate::DynSlice<dyn Trait $(< $($trgen),* >)?>
             where
                 dyn Trait $(< $($trgen),* >)?: core::ptr::Pointee<Metadata = core::ptr::DynMetadata<dyn Trait $(< $($trgen),* >)?>>,
@@ -141,7 +141,7 @@ macro_rules! declare_new_fn {
 
             #[allow(unused)]
             #[must_use]
-            /// Create a mutable dyn slice from a mutable slice
+            #[doc = concat!("Create a mutable dyn slice from a mutable slice of a type that implements [`", stringify!($tr), "`]")]
             pub fn new_mut<'a, $($( $gen ,)*)? DynSliceFromType: Trait $(< $($trgen),* >)? + 'static>(value: &'a mut [DynSliceFromType]) -> $crate::DynSliceMut<dyn Trait $(< $($trgen),* >)?>
             where
                 dyn Trait $(< $($trgen),* >)?: core::ptr::Pointee<Metadata = core::ptr::DynMetadata<dyn Trait $(< $($trgen),* >)?>>,
