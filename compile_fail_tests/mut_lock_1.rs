@@ -12,5 +12,5 @@ fn main() {
     let a = slice_1.get_mut(3).unwrap().borrow_mut();
     *a = 6;
 
-    let _ = slice_1.iter().chain(slice_2.iter());
+    let _ = (&slice_1, &slice_2);
 }

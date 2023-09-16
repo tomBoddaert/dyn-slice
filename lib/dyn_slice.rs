@@ -135,21 +135,31 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
         self.len == 0
     }
 
+    #[inline]
+    #[must_use]
+    /// Returns a reference to the first element, without doing bounds checking.
+    ///
+    /// # Safety
+    /// The caller must ensure that `!self.is_empty()`
+    /// Calling this on an empty `DynSlice` will result in a segfault!
+    pub unsafe fn first_unchecked(&self) -> &Dyn {
+        debug_assert!(!self.is_empty(), "[dyn-slice] slice is empty!");
+        debug_assert!(
+            !self.vtable_ptr.is_null(),
+            "[dyn-slice] vtable pointer is null on access!"
+        );
+
+        &*ptr::from_raw_parts::<Dyn>(self.as_ptr(), transmute(self.vtable_ptr()))
+    }
+
     #[must_use]
     /// Returns a reference to the first element of the slice, or `None` if it is empty.
     pub fn first(&self) -> Option<&Dyn> {
         (!self.is_empty()).then(|| {
-            debug_assert!(
-                !self.vtable_ptr.is_null(),
-                "[dyn-slice] vtable pointer is null on access!"
-            );
-
             // SAFETY:
             // The above statement ensures that slice is not empty, and
-            // therefore has a first (index 0) element and a valid vtable pointer,
-            // which can be transmuted to DynMetadata it contains a single pointer,
-            // and has the same layout as *const ().
-            unsafe { &*ptr::from_raw_parts::<Dyn>(self.as_ptr(), transmute(self.vtable_ptr())) }
+            // therefore has a first (index 0) element and a valid vtable pointer.
+            unsafe { self.first_unchecked() }
         })
     }
 
@@ -181,7 +191,7 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
     /// Returns a reference to the element at the given `index`, without doing bounds checking.
     ///
     /// # Safety
-    /// The caller must ensure that index < self.len()
+    /// The caller must ensure that `index < self.len()`
     /// Calling this on an empty dyn Slice will result in a segfault!
     pub unsafe fn get_unchecked(&self, index: usize) -> &Dyn {
         debug_assert!(
@@ -264,10 +274,7 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
     #[must_use]
     /// Returns an iterator over the slice.
     pub const fn iter(&'a self) -> Iter<'a, Dyn> {
-        Iter {
-            slice: *self,
-            next_index: 0,
-        }
+        Iter { slice: *self }
     }
 }
 
@@ -294,10 +301,7 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> IntoIterator for Dy
     type Item = &'a Dyn;
 
     fn into_iter(self) -> Self::IntoIter {
-        Iter {
-            slice: self,
-            next_index: 0,
-        }
+        Iter { slice: self }
     }
 }
 

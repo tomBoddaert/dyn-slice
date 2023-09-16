@@ -7,5 +7,5 @@ error[E0502]: cannot borrow `slice_1` as mutable because it is also borrowed as 
   |     let a = slice_1.get_mut(3).unwrap().borrow_mut();
   |             ^^^^^^^^^^^^^^^^^^ mutable borrow occurs here
 ...
-  |     let _ = slice_1.iter().chain(slice_2.iter());
-  |                                  -------------- immutable borrow later used here
+  |     let _ = (&slice_1, &slice_2);
+  |                        -------- immutable borrow later used here

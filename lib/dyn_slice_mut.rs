@@ -97,6 +97,23 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
         self.0.data.cast_mut()
     }
 
+    #[inline]
+    #[must_use]
+    /// Returns a mutable reference to the first element, without doing bounds checking.
+    ///
+    /// # Safety
+    /// The caller must ensure that `!self.is_empty()`
+    /// Calling this on an empty `DynSlice` will result in a segfault!
+    pub unsafe fn first_unchecked_mut(&mut self) -> &mut Dyn {
+        debug_assert!(!self.is_empty(), "[dyn-slice] slice is empty!");
+        debug_assert!(
+            !self.vtable_ptr.is_null(),
+            "[dyn-slice] vtable pointer is null on access!"
+        );
+
+        &mut *ptr::from_raw_parts_mut::<Dyn>(self.as_mut_ptr(), transmute(self.vtable_ptr()))
+    }
+
     #[must_use]
     /// Returns a mutable reference to the first element of the slice, or `None` if it is empty.
     pub fn first_mut(&mut self) -> Option<&mut Dyn> {
@@ -108,15 +125,8 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
 
             // SAFETY:
             // The above statement ensures that slice is not empty, and
-            // therefore has a first (index 0) element and a valid vtable pointer,
-            // which can be transmuted to DynMetadata it contains a single pointer,
-            // and has the same layout as *const ().
-            unsafe {
-                &mut *ptr::from_raw_parts_mut::<Dyn>(
-                    self.as_mut_ptr(),
-                    transmute(self.vtable_ptr()),
-                )
-            }
+            // therefore has a first (index 0) element and a valid vtable pointer.
+            unsafe { self.first_unchecked_mut() }
         })
     }
 
@@ -148,7 +158,7 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
     /// Returns a mutable reference to the element at the given `index`, without doing bounds checking.
     ///
     /// # Safety
-    /// The caller must ensure that index < self.len()
+    /// The caller must ensure that `index < self.len()`
     /// Calling this on an empty dyn Slice will result in a segfault!
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut Dyn {
         debug_assert!(
@@ -239,7 +249,6 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
             // The created slice is from index 0 and has the same length as the
             // original slice, so must be valid.
             slice: unsafe { self.slice_unchecked_mut(0, self.len) },
-            next_index: 0,
         }
     }
 }
@@ -276,10 +285,7 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> IntoIterator for Dy
     type Item = &'a mut Dyn;
 
     fn into_iter(self) -> Self::IntoIter {
-        IterMut {
-            slice: self,
-            next_index: 0,
-        }
+        IterMut { slice: self }
     }
 }
 

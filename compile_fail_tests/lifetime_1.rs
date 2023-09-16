@@ -11,5 +11,5 @@ fn main() {
         borrow::new(&array_2)
     };
 
-    let _ = slice_1.iter().chain(slice_2.iter());
+    let _ = (&slice_1, &slice_2);
 }

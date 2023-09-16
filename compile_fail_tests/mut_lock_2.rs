@@ -11,5 +11,5 @@ fn main() {
 
     let _ = slice_1.slice_mut(2..4).unwrap();
 
-    let _ = slice_1.iter().chain(slice_2.iter());
+    let _ = (&slice_1, &slice_2);
 }
