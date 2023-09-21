@@ -183,8 +183,8 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
     ///
     /// # Safety
     /// Caller must ensure that:
-    /// - `start` < `self.len()`
-    /// - `len` <= `self.len() - start`
+    /// - `start < self.len()`
+    /// - `len <= self.len() - start`
     pub unsafe fn slice_unchecked_mut(&mut self, start: usize, len: usize) -> DynSliceMut<Dyn> {
         // NOTE: DO NOT MAKE THIS FUNCTION RETURN `Self` as `Self` comes with an incorrect lifetime
         debug_assert!(

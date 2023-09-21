@@ -114,11 +114,16 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>> + 'a> DoubleEndedIte
     }
 }
 
-impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>> + 'a> FusedIterator for Iter<'a, Dyn> {}
 impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>> + 'a> ExactSizeIterator
     for Iter<'a, Dyn>
 {
+    #[inline]
+    fn len(&self) -> usize {
+        self.slice.len()
+    }
 }
+
+impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>> + 'a> FusedIterator for Iter<'a, Dyn> {}
 
 #[cfg(test)]
 mod test {
