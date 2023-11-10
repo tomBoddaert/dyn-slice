@@ -16,6 +16,19 @@ use crate::DynSliceMut;
 
 use super::{declare_new_fn, DynSlice};
 
+#[allow(unused)]
+macro_rules! feature_availability {
+    ( $feature:literal ) => {
+        concat!(
+            "(only available with the [`",
+            $feature,
+            "` feature](https://docs.rs/crate/dyn-slice/",
+            env!("CARGO_PKG_VERSION"),
+            "/features))"
+        )
+    };
+}
+
 declare_new_fn!(
     ///
     /// `DynSlice(Mut)<dyn Any>`, `DynSlice(Mut)<dyn Any + Send>` and `DynSlice(Mut)<dyn Any + Send + Sync>` have a few extra methods:
@@ -24,6 +37,24 @@ declare_new_fn!(
     /// - [`DynSliceMut::downcast_mut`]
     Any,
     pub any
+);
+declare_new_fn!(
+    ///
+    /// `DynSlice(Mut)<dyn Any>`, `DynSlice(Mut)<dyn Any + Send>` and `DynSlice(Mut)<dyn Any + Send + Sync>` have a few extra methods:
+    /// - [`DynSlice::is`]
+    /// - [`DynSlice::downcast`]
+    /// - [`DynSliceMut::downcast_mut`]
+    Any :+ Send,
+    pub any_send
+);
+declare_new_fn!(
+    ///
+    /// `DynSlice(Mut)<dyn Any>`, `DynSlice(Mut)<dyn Any + Send>` and `DynSlice(Mut)<dyn Any + Send + Sync>` have a few extra methods:
+    /// - [`DynSlice::is`]
+    /// - [`DynSlice::downcast`]
+    /// - [`DynSliceMut::downcast_mut`]
+    Any :+ Sync :+ Send,
+    pub any_sync_send
 );
 macro_rules! impl_any_methods {
     ( $( $t:ty ),* ) => {
@@ -46,6 +77,7 @@ macro_rules! impl_any_methods {
                     })
                 }
             }
+
             impl<'a> DynSliceMut<'a, $t> {
                 /// Returns the underlying slice as `&mut [T]`, or `None` if the underlying slice is not of type `T`.
                 #[must_use]
@@ -162,7 +194,7 @@ mod standard_alloc {
 
     declare_new_fn!(
         #[cfg_attr(doc, doc(cfg(feature = "alloc")))]
-        #[doc = concat!("(only available with the [`alloc` feature](https://docs.rs/crate/dyn-slice/", env!("CARGO_PKG_VERSION"),"/features))")]
+        #[doc = feature_availability!("alloc")]
         ToString,
         pub to_string
     );
@@ -181,20 +213,20 @@ mod standard_std {
 
     declare_new_fn!(
         #[cfg_attr(doc, doc(cfg(feature = "std")))]
-        #[doc = concat!("(only available with the [`std` feature](https://docs.rs/crate/dyn-slice/", env!("CARGO_PKG_VERSION"),"/features))")]
+        #[doc = feature_availability!("std")]
         Error,
         pub error,
     );
 
     declare_new_fn!(
         #[cfg_attr(doc, doc(cfg(feature = "std")))]
-        #[doc = concat!("(only available with the [`std` feature](https://docs.rs/crate/dyn-slice/", env!("CARGO_PKG_VERSION"),"/features))")]
+        #[doc = feature_availability!("std")]
         Seek,
         pub seek,
     );
     declare_new_fn!(
         #[cfg_attr(doc, doc(cfg(feature = "std")))]
-        #[doc = concat!("(only available with the [`std` feature](https://docs.rs/crate/dyn-slice/", env!("CARGO_PKG_VERSION"),"/features))")]
+        #[doc = feature_availability!("std")]
         Write,
         pub io_write,
     );

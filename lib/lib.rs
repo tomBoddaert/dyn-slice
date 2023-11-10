@@ -59,8 +59,11 @@ pub use iter_mut::*;
 /// Trait with a given generic:  
 /// `declare_new_fn!(Trait:<Type>, new_module_name);`
 ///
-/// Trait with a generic:
+/// Trait with a generic:  
 /// `declare_new_fn!(<T>, Trait:<T>, new_module_name);`
+///
+/// Trait with [auto traits](https://doc.rust-lang.org/beta/reference/special-types-and-traits.html#auto-traits):  
+/// `declare_new_fn!(Trait :+ AutoTrait, new_module_name)`
 ///
 /// A visibility qualifier can be added before the module name.
 /// Attributes can also be added before the other arguments.
@@ -80,7 +83,6 @@ pub use iter_mut::*;
 /// # #![feature(ptr_metadata)]
 /// # mod test {
 /// # use dyn_slice::declare_new_fn;
-///
 /// pub trait A<B, C> {
 ///     fn b(&self) -> B;
 ///     fn c(&self) -> C;
@@ -97,78 +99,126 @@ macro_rules! declare_new_fn {
     (
         $(#[ $meta:meta ])*
         $(< $( $gen:ident ),* >,)?
-        $tr:path $( :<$( $trgen:ident ),*> )?,
+        $tr:path $( :<$( $trgen:ident ),*> )? $(:+ $atr:path )*,
         $vis:vis $name:ident $(,)?
     ) => {
-        #[doc = concat!("new functions for `&dyn [`[`", stringify!($tr), "`]`]`")]
+        #[doc = concat!("new functions for `&dyn [`[`", stringify!($tr), "`]", $( "` + `[`", stringify!($atr), "`]" ,)* "`]`")]
         $(#[ $meta ])*
         $vis mod $name {
             #[allow(unused_imports)]
             use super::*;
-            use $tr as Trait;
+            use $tr as __Trait;
 
-            #[allow(unused)]
-            #[must_use]
-            #[doc = concat!("Create a dyn slice from a slice of a type that implements [`", stringify!($tr), "`]")]
-            pub fn new<'a, $($( $gen ,)*)? DynSliceFromType: Trait $(< $($trgen),* >)? + 'static>(value: &'a [DynSliceFromType]) -> $crate::DynSlice<dyn Trait $(< $($trgen),* >)?>
-            where
-                dyn Trait $(< $($trgen),* >)?: core::ptr::Pointee<Metadata = core::ptr::DynMetadata<dyn Trait $(< $($trgen),* >)?>>,
-                $($(
-                    $gen: 'static
-                ),*)?
-            {
-                use core::{
-                    mem::transmute,
-                    ptr::{metadata, null}
-                };
+            #[doc = concat!("An alias for `dyn `[`", stringify!($tr), "`]", $( "` + `[`", stringify!($atr), "`]" ,)*)]
+            pub type Dyn $(< $( $gen ),* >)? = dyn __Trait $(< $( $trgen ),* >)? $(+ $atr )* + 'static;
 
-                // SAFETY:
-                // DynMetadata contains a single pointer to the vtable, and the layout is the same as *const (),
-                // so it can be transmuted.
-                unsafe {
-                    // Get the dyn metadata from the first element of value
-                    // If value is empty, the metadata should never be accessed, so set it to a null pointer
-                    let vtable_ptr = value.get(0).map_or(
-                        null::<()>(),
-                        |example| {
-                            transmute(metadata(example as &dyn Trait $(< $($trgen),* >)?))
-                        }
-                    );
+            #[doc = concat!("An alias for `&dyn [`[`", stringify!($tr), "`]", $( "` + `[`", stringify!($atr), "`]" ,)* "`]`")]
+            pub type Output<'a, $( $( $gen ),* )?> = $crate::DynSlice<'a, Dyn $(< $( $gen ),* >)?>;
 
-                    $crate::DynSlice::with_vtable_ptr(value, vtable_ptr)
-                }
+            #[doc = concat!("An alias for `&mut dyn [`[`", stringify!($tr), "`]", $( "` + `[`", stringify!($atr), "`]" ,)* "`]`")]
+            pub type OutputMut<'a, $( $( $gen ),* )?> = $crate::DynSliceMut<'a, Dyn $(< $( $gen ),* >)?>;
+
+            $crate::__new_fn!(@new
+                | Dyn $(< $( $gen ),* >)?
+                | Output $(< $( $gen ),* >)?
+                | new
+                | $($( $gen ),*)?
+                | $tr
+                | $(<$( $trgen ),*>)?
+                | $( $atr ),*
+            );
+            $crate::__new_fn!(@new_mut
+                | Dyn $(< $( $gen ),* >)?
+                | OutputMut $(< $( $gen ),* >)?
+                | new_mut
+                | $($( $gen ),*)?
+                | $tr
+                | $(<$( $trgen ),*>)?
+                | $( $atr ),*
+            );
+        }
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __new_fn {
+    (@new
+        | $dyn_type:ty
+        | $output:ty
+        | $name:ident
+        | $( $gen:ident ),*
+        | $tr:path
+        | $(< $( $trgen:ident ),* >)?
+        | $( $atr:path ),*
+    ) => {
+        #[allow(unused)]
+        #[must_use]
+        #[doc = concat!("Create a dyn slice from a slice of a type that implements [`", stringify!($tr), "`]" $(, "` + `[`", stringify!($atr), "`]" )*)]
+        pub fn $name<'a, $( $gen ,)* DynSliceFromType: __Trait $(< $( $trgen ),* >)? $(+ $atr )* + 'static>(value: &'a [DynSliceFromType]) -> $output
+        where
+            $dyn_type: core::ptr::Pointee<Metadata = core::ptr::DynMetadata<$dyn_type>>,
+            $( $gen: 'static ),*
+        {
+            use core::{
+                mem::transmute,
+                ptr::{metadata, null}
+            };
+
+            // SAFETY:
+            // DynMetadata contains a single pointer to the vtable, and the layout is the same as *const (),
+            // so it can be transmuted.
+            unsafe {
+                // Get the dyn metadata from the first element of value
+                // If value is empty, the metadata should never be accessed, so set it to a null pointer
+                let vtable_ptr = value.get(0).map_or(
+                    null::<()>(),
+                    |example| {
+                        transmute(metadata(example as &$dyn_type))
+                    }
+                );
+
+                $crate::DynSlice::with_vtable_ptr(value, vtable_ptr)
             }
+        }
+    };
 
-            #[allow(unused)]
-            #[must_use]
-            #[doc = concat!("Create a mutable dyn slice from a mutable slice of a type that implements [`", stringify!($tr), "`]")]
-            pub fn new_mut<'a, $($( $gen ,)*)? DynSliceFromType: Trait $(< $($trgen),* >)? + 'static>(value: &'a mut [DynSliceFromType]) -> $crate::DynSliceMut<dyn Trait $(< $($trgen),* >)?>
-            where
-                dyn Trait $(< $($trgen),* >)?: core::ptr::Pointee<Metadata = core::ptr::DynMetadata<dyn Trait $(< $($trgen),* >)?>>,
-                $($(
-                    $gen: 'static
-                ),*)?
-            {
-                use core::{
-                    mem::transmute,
-                    ptr::{metadata, null}
-                };
+    (@new_mut
+        | $dyn_type:ty
+        | $output:ty
+        | $name:ident
+        | $( $gen:ident ),*
+        | $tr:path
+        | $(< $( $trgen:ident ),* >)?
+        | $( $atr:path ),*
+    ) => {
+        #[allow(unused)]
+        #[must_use]
+        #[doc = concat!("Create a mutable dyn slice from a mutable slice of a type that implements [`", stringify!($tr), "`]" $(, "` + `[`", stringify!($atr), "`]" )*)]
+        pub fn $name<'a, $( $gen ,)* DynSliceFromType: __Trait $(< $( $trgen ),* >)? $(+ $atr )* + 'static>(value: &'a mut [DynSliceFromType]) -> $output
+        where
+            $dyn_type: core::ptr::Pointee<Metadata = core::ptr::DynMetadata<$dyn_type>>,
+            $( $gen: 'static ),*
+        {
+            use core::{
+                mem::transmute,
+                ptr::{metadata, null}
+            };
 
-                // SAFETY:
-                // DynMetadata contains a single pointer to the vtable, and the layout is the same as *const (),
-                // so it can be transmuted.
-                unsafe {
-                    // Get the dyn metadata from the first element of value
-                    // If value is empty, the metadata should never be accessed, so set it to a null pointer
-                    let vtable_ptr = value.get(0).map_or(
-                        null::<()>(),
-                        |example| {
-                            transmute(metadata(example as &dyn Trait $(< $($trgen),* >)?))
-                        }
-                    );
+            // SAFETY:
+            // DynMetadata contains a single pointer to the vtable, and the layout is the same as *const (),
+            // so it can be transmuted.
+            unsafe {
+                // Get the dyn metadata from the first element of value
+                // If value is empty, the metadata should never be accessed, so set it to a null pointer
+                let vtable_ptr = value.get(0).map_or(
+                    null::<()>(),
+                    |example| {
+                        transmute(metadata(example as &$dyn_type))
+                    }
+                );
 
-                    $crate::DynSliceMut::with_vtable_ptr(value, vtable_ptr)
-                }
+                $crate::DynSliceMut::with_vtable_ptr(value, vtable_ptr)
             }
         }
     };
