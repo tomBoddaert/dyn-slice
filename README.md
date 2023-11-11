@@ -12,13 +12,14 @@ cargo add dyn-slice
 [Examples](/examples/)
 
 [dyn-slice on crates.io](https://crates.io/crates/dyn-slice)  
+[dyn-slice on lib.rs](https://lib.rs/crates/dyn-slice)  
 [dyn-slice on GitHub](https://github.com/tomBoddaert/dyn-slice)
 
 ## Warning
 
-DO NOT USE THIS IN PRODUCTION (or any important) CODE: IT IS A PROOF OF CONCEPT AND PROBABLY HAS A FEW BUGS.
+This was originally just a proof of concept and may has some bugs, so it may be best not to use it in production (or any important) code.
 
-With that said, feel free to use it in code that does not have to be reliable and to send pull requests to fix some of the bugs.
+With that said, feel free to use it in code that does not have to be reliable and to open an issue if you find any bugs.
 
 ## License
 

@@ -113,14 +113,14 @@ macro_rules! declare_new_fn {
             pub type Dyn $(< $( $gen ),* >)? = dyn __Trait $(< $( $trgen ),* >)? $(+ $atr )* + 'static;
 
             #[doc = concat!("An alias for `&dyn [`[`", stringify!($tr), "`]", $( "` + `[`", stringify!($atr), "`]" ,)* "`]`")]
-            pub type Output<'a, $( $( $gen ),* )?> = $crate::DynSlice<'a, Dyn $(< $( $gen ),* >)?>;
+            pub type Slice<'a, $( $( $gen ),* )?> = $crate::DynSlice<'a, Dyn $(< $( $gen ),* >)?>;
 
             #[doc = concat!("An alias for `&mut dyn [`[`", stringify!($tr), "`]", $( "` + `[`", stringify!($atr), "`]" ,)* "`]`")]
-            pub type OutputMut<'a, $( $( $gen ),* )?> = $crate::DynSliceMut<'a, Dyn $(< $( $gen ),* >)?>;
+            pub type SliceMut<'a, $( $( $gen ),* )?> = $crate::DynSliceMut<'a, Dyn $(< $( $gen ),* >)?>;
 
             $crate::__new_fn!(@new
                 | Dyn $(< $( $gen ),* >)?
-                | Output $(< $( $gen ),* >)?
+                | Slice $(< $( $gen ),* >)?
                 | new
                 | $($( $gen ),*)?
                 | $tr
@@ -129,7 +129,7 @@ macro_rules! declare_new_fn {
             );
             $crate::__new_fn!(@new_mut
                 | Dyn $(< $( $gen ),* >)?
-                | OutputMut $(< $( $gen ),* >)?
+                | SliceMut $(< $( $gen ),* >)?
                 | new_mut
                 | $($( $gen ),*)?
                 | $tr

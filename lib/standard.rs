@@ -35,6 +35,29 @@ declare_new_fn!(
     /// - [`DynSlice::is`]
     /// - [`DynSlice::downcast`]
     /// - [`DynSliceMut::downcast_mut`]
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dyn_slice::standard::any;
+    /// let array: [u8; 4] = [1, 2, 4, 8];
+    /// let slice = any::new(&array);
+    ///
+    /// // Assert that the dyn-slice is a slice of `u8`s
+    /// assert!(slice.is::<u8>());
+    /// // Downcast the dyn-slice to a slice of `u8`s
+    /// assert_eq!(slice.downcast::<u8>(), Some(array.as_slice()));
+    /// ```
+    ///
+    /// ```
+    /// # use dyn_slice::standard::any;
+    /// let mut array: [u8; 4] = [1, 2, 4, 8];
+    /// let mut slice = any::new_mut(&mut array);
+    ///
+    /// // Downcast the mutable dyn-slice to a mutable slice of `u8`s
+    /// slice.downcast_mut::<u8>().unwrap()[1] = 255;
+    /// assert_eq!(array, [1, 255, 4, 8]);
+    /// ```
     Any,
     pub any
 );
@@ -44,6 +67,29 @@ declare_new_fn!(
     /// - [`DynSlice::is`]
     /// - [`DynSlice::downcast`]
     /// - [`DynSliceMut::downcast_mut`]
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dyn_slice::standard::any_send;
+    /// let array: [u8; 4] = [1, 2, 4, 8];
+    /// let slice = any_send::new(&array);
+    ///
+    /// // Assert that the dyn-slice is a slice of `u8`s
+    /// assert!(slice.is::<u8>());
+    /// // Downcast the dyn-slice to a slice of `u8`s
+    /// assert_eq!(slice.downcast::<u8>(), Some(array.as_slice()));
+    /// ```
+    ///
+    /// ```
+    /// # use dyn_slice::standard::any_send;
+    /// let mut array: [u8; 4] = [1, 2, 4, 8];
+    /// let mut slice = any_send::new_mut(&mut array);
+    ///
+    /// // Downcast the mutable dyn-slice to a mutable slice of `u8`s
+    /// slice.downcast_mut::<u8>().unwrap()[1] = 255;
+    /// assert_eq!(array, [1, 255, 4, 8]);
+    /// ```
     Any :+ Send,
     pub any_send
 );
@@ -53,6 +99,29 @@ declare_new_fn!(
     /// - [`DynSlice::is`]
     /// - [`DynSlice::downcast`]
     /// - [`DynSliceMut::downcast_mut`]
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dyn_slice::standard::any_sync_send;
+    /// let array: [u8; 4] = [1, 2, 4, 8];
+    /// let slice = any_sync_send::new(&array);
+    ///
+    /// // Assert that the dyn-slice is a slice of `u8`s
+    /// assert!(slice.is::<u8>());
+    /// // Downcast the dyn-slice to a slice of `u8`s
+    /// assert_eq!(slice.downcast::<u8>(), Some(array.as_slice()));
+    /// ```
+    ///
+    /// ```
+    /// # use dyn_slice::standard::any_sync_send;
+    /// let mut array: [u8; 4] = [1, 2, 4, 8];
+    /// let mut slice = any_sync_send::new_mut(&mut array);
+    ///
+    /// // Downcast the mutable dyn-slice to a mutable slice of `u8`s
+    /// slice.downcast_mut::<u8>().unwrap()[1] = 255;
+    /// assert_eq!(array, [1, 255, 4, 8]);
+    /// ```
     Any :+ Sync :+ Send,
     pub any_sync_send
 );
@@ -101,7 +170,22 @@ declare_new_fn!(<T>, AsMut:<T>, pub as_mut);
 declare_new_fn!(<Borrowed>, Borrow:<Borrowed>, pub borrow);
 declare_new_fn!(<Borrowed>, BorrowMut:<Borrowed>, pub borrow_mut);
 
-declare_new_fn!(<Rhs>, PartialEq:<Rhs>, pub partial_eq);
+declare_new_fn!(
+    ///
+    /// `DynSlice(Mut)<dyn PartialEq<Rhs>>` implements `PartialEq<[Rhs]>`
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dyn_slice::standard::partial_eq;
+    /// let array: [u8; 4] = [1, 2, 4, 8];
+    /// let slice = partial_eq::new(&array);
+    ///
+    /// assert!(slice == array.as_slice());
+    /// ```
+    <Rhs>, PartialEq:<Rhs>,
+    pub partial_eq
+);
 impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + PartialEq<Rhs> + ?Sized, Rhs> PartialEq<[Rhs]>
     for DynSlice<'a, Dyn>
 {
@@ -121,12 +205,44 @@ impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + PartialEq<Rhs> + ?Sized, Rh
         self.0.eq(other)
     }
 }
+impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + PartialEq<Rhs> + ?Sized, Rhs> PartialEq<&[Rhs]>
+    for DynSlice<'a, Dyn>
+{
+    #[inline]
+    fn eq(&self, other: &&[Rhs]) -> bool {
+        self.eq(*other)
+    }
+}
+impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + PartialEq<Rhs> + ?Sized, Rhs> PartialEq<&[Rhs]>
+    for DynSliceMut<'a, Dyn>
+{
+    #[inline]
+    fn eq(&self, other: &&[Rhs]) -> bool {
+        self.0.eq(*other)
+    }
+}
 
 declare_new_fn!(<Rhs>, PartialOrd:<Rhs>, pub partial_ord);
 
 declare_new_fn!(Binary, pub binary);
 
-declare_new_fn!(Debug, pub debug);
+declare_new_fn!(
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use dyn_slice::standard::debug;
+    /// let array: [u8; 4] = [1, 2, 4, 8];
+    /// let slice = debug::new(&array);
+    ///
+    /// assert_eq!(
+    ///     format!("{slice:?}"),
+    ///     "[1, 2, 4, 8]",
+    /// );
+    /// ```
+    Debug,
+    pub debug
+);
 impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + Debug + ?Sized> Debug for DynSlice<'a, Dyn> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.iter()).finish()
@@ -148,6 +264,12 @@ declare_new_fn!(Octal, pub octal);
 
 declare_new_fn!(Pointer, pub pointer);
 impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + ?Sized> Pointer for DynSlice<'a, Dyn> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <*const () as Pointer>::fmt(&self.data, f)
+    }
+}
+impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + ?Sized> Pointer for DynSliceMut<'a, Dyn> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         <*const () as Pointer>::fmt(&self.data, f)
