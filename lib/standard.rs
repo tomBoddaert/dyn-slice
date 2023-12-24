@@ -2,19 +2,24 @@ use core::{
     any::Any,
     borrow::{Borrow, BorrowMut},
     cmp::{PartialEq, PartialOrd},
+    convert::{AsMut, AsRef},
     fmt::{
         self, Binary, Debug, Display, LowerExp, LowerHex, Octal, Pointer, UpperExp, UpperHex, Write,
     },
+    future::Future,
+    hash::{self, BuildHasher, Hasher},
+    iter::{DoubleEndedIterator, ExactSizeIterator, FusedIterator, Iterator},
+    marker::{Send, Sized, Sync},
     ops::{
-        AddAssign, BitAndAssign, BitOrAssign, BitXorAssign, DivAssign, MulAssign, RemAssign,
-        ShlAssign, ShrAssign, SubAssign,
+        AddAssign, BitAndAssign, BitOrAssign, BitXorAssign, Deref, DerefMut, DivAssign, Index,
+        IndexMut, MulAssign, RemAssign, ShlAssign, ShrAssign, SubAssign,
     },
     ptr::{DynMetadata, Pointee},
 };
 
 use crate::DynSliceMut;
 
-use super::{declare_new_fn, DynSlice};
+use super::{declare_new_fns, DynSlice};
 
 #[allow(unused)]
 macro_rules! feature_availability {
@@ -29,7 +34,8 @@ macro_rules! feature_availability {
     };
 }
 
-declare_new_fn!(
+declare_new_fns!(
+    #[crate = crate]
     ///
     /// `DynSlice(Mut)<dyn Any>`, `DynSlice(Mut)<dyn Any + Send>` and `DynSlice(Mut)<dyn Any + Send + Sync>` have a few extra methods:
     /// - [`DynSlice::is`]
@@ -58,10 +64,10 @@ declare_new_fn!(
     /// slice.downcast_mut::<u8>().unwrap()[1] = 255;
     /// assert_eq!(array, [1, 255, 4, 8]);
     /// ```
-    Any,
-    pub any
+    pub any Any
 );
-declare_new_fn!(
+declare_new_fns!(
+    #[crate = crate]
     ///
     /// `DynSlice(Mut)<dyn Any>`, `DynSlice(Mut)<dyn Any + Send>` and `DynSlice(Mut)<dyn Any + Send + Sync>` have a few extra methods:
     /// - [`DynSlice::is`]
@@ -90,10 +96,10 @@ declare_new_fn!(
     /// slice.downcast_mut::<u8>().unwrap()[1] = 255;
     /// assert_eq!(array, [1, 255, 4, 8]);
     /// ```
-    Any :+ Send,
-    pub any_send
+    pub any_send Any + Send
 );
-declare_new_fn!(
+declare_new_fns!(
+    #[crate = crate]
     ///
     /// `DynSlice(Mut)<dyn Any>`, `DynSlice(Mut)<dyn Any + Send>` and `DynSlice(Mut)<dyn Any + Send + Sync>` have a few extra methods:
     /// - [`DynSlice::is`]
@@ -122,8 +128,7 @@ declare_new_fn!(
     /// slice.downcast_mut::<u8>().unwrap()[1] = 255;
     /// assert_eq!(array, [1, 255, 4, 8]);
     /// ```
-    Any :+ Sync :+ Send,
-    pub any_sync_send
+    pub any_sync_send Any + Sync + Send
 );
 macro_rules! impl_any_methods {
     ( $( $t:ty ),* ) => {
@@ -164,13 +169,17 @@ macro_rules! impl_any_methods {
 }
 impl_any_methods!(dyn Any, dyn Any + Send, dyn Any + Sync + Send);
 
-declare_new_fn!(<T>, AsRef:<T>, pub as_ref);
-declare_new_fn!(<T>, AsMut:<T>, pub as_mut);
+declare_new_fns!(
+    #[crate = crate]
+    pub borrow<Borrowed> Borrow<Borrowed>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub borrow_mut<Borrowed> BorrowMut<Borrowed>
+);
 
-declare_new_fn!(<Borrowed>, Borrow:<Borrowed>, pub borrow);
-declare_new_fn!(<Borrowed>, BorrowMut:<Borrowed>, pub borrow_mut);
-
-declare_new_fn!(
+declare_new_fns!(
+    #[crate = crate]
     ///
     /// `DynSlice(Mut)<dyn PartialEq<Rhs>>` implements `PartialEq<[Rhs]>`
     ///
@@ -183,8 +192,7 @@ declare_new_fn!(
     ///
     /// assert!(slice == array.as_slice());
     /// ```
-    <Rhs>, PartialEq:<Rhs>,
-    pub partial_eq
+    pub partial_eq<Rhs> PartialEq<Rhs>
 );
 impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + PartialEq<Rhs> + ?Sized, Rhs> PartialEq<[Rhs]>
     for DynSlice<'a, Dyn>
@@ -221,12 +229,26 @@ impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + PartialEq<Rhs> + ?Sized, Rh
         self.0.eq(*other)
     }
 }
+declare_new_fns!(
+    #[crate = crate]
+    pub partial_ord<Rhs> PartialOrd<Rhs>
+);
 
-declare_new_fn!(<Rhs>, PartialOrd:<Rhs>, pub partial_ord);
+declare_new_fns!(
+    #[crate = crate]
+    pub as_ref<T> AsRef<T>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub as_mut<T> AsMut<T>
+);
 
-declare_new_fn!(Binary, pub binary);
-
-declare_new_fn!(
+declare_new_fns!(
+    #[crate = crate]
+    pub binary Binary
+);
+declare_new_fns!(
+    #[crate = crate]
     ///
     /// # Examples
     ///
@@ -240,8 +262,7 @@ declare_new_fn!(
     ///     "[1, 2, 4, 8]",
     /// );
     /// ```
-    Debug,
-    pub debug
+    pub debug Debug
 );
 impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + Debug + ?Sized> Debug for DynSlice<'a, Dyn> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -256,13 +277,26 @@ impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + Debug + ?Sized> Debug
         <DynSlice<Dyn> as Debug>::fmt(&self.0, f)
     }
 }
-
-declare_new_fn!(Display, pub display);
-declare_new_fn!(LowerExp, pub lower_exp);
-declare_new_fn!(LowerHex, pub lower_hex);
-declare_new_fn!(Octal, pub octal);
-
-declare_new_fn!(Pointer, pub pointer);
+declare_new_fns!(
+    #[crate = crate]
+    pub display Display
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub lower_exp LowerExp
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub lower_hex LowerHex
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub octal Octal
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub pointer Pointer
+);
 impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + ?Sized> Pointer for DynSlice<'a, Dyn> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -275,21 +309,118 @@ impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + ?Sized> Pointer for DynSlic
         <*const () as Pointer>::fmt(&self.data, f)
     }
 }
+declare_new_fns!(
+    #[crate = crate]
+    pub upper_exp UpperExp
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub upper_hex UpperHex
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub write Write
+);
 
-declare_new_fn!(UpperExp, pub upper_exp);
-declare_new_fn!(UpperHex, pub upper_hex);
-declare_new_fn!(Write, pub write);
+declare_new_fns!(
+    #[crate = crate]
+    pub future<Output> Future<Output = Output>
+);
 
-declare_new_fn!(<Rhs>, AddAssign:<Rhs>, pub add_assign);
-declare_new_fn!(<Rhs>, BitAndAssign:<Rhs>, pub bit_and_assign);
-declare_new_fn!(<Rhs>, BitOrAssign:<Rhs>, pub bit_or_assign);
-declare_new_fn!(<Rhs>, BitXorAssign:<Rhs>, pub bit_xor_assign);
-declare_new_fn!(<Rhs>, DivAssign:<Rhs>, pub div_assign);
-declare_new_fn!(<Rhs>, MulAssign:<Rhs>, pub mul_assign);
-declare_new_fn!(<Rhs>, RemAssign:<Rhs>, pub rem_assign);
-declare_new_fn!(<Rhs>, ShlAssign:<Rhs>, pub shl_assign);
-declare_new_fn!(<Rhs>, ShrAssign:<Rhs>, pub shr_assign);
-declare_new_fn!(<Rhs>, SubAssign:<Rhs>, pub sub_assign);
+declare_new_fns!(
+    #[crate = crate]
+    pub build_hasher<Hasher: hash::Hasher> BuildHasher<Hasher = Hasher>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub hasher Hasher
+);
+
+declare_new_fns!(
+    #[crate = crate]
+    pub double_ended_iterator<Item> DoubleEndedIterator<Item = Item>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub exact_size_iterator<Item> ExactSizeIterator<Item = Item>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub fused_iterator<Item> FusedIterator<Item = Item>
+);
+declare_new_fns!(
+    ///
+    /// ```rust
+    /// # use dyn_slice::standard::iterator;
+    /// let mut array = [(1..5), (2..9), (4..6)];
+    /// let mut slice = iterator::new_mut(&mut array);
+    ///
+    /// assert_eq!(slice[0].next(), Some(1));
+    /// assert_eq!(slice[1].next(), Some(2));
+    /// assert_eq!(slice[2].next(), Some(4));
+    ///
+    /// assert_eq!(slice[0].next(), Some(2));
+    /// ```
+    #[crate = crate]
+    pub iterator<Item> Iterator<Item = Item>
+);
+
+declare_new_fns!(
+    #[crate = crate]
+    pub add_assign<Rhs> AddAssign<Rhs>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub bit_and_assign<Rhs> BitAndAssign<Rhs>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub bit_or_assign<Rhs> BitOrAssign<Rhs>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub bit_xor_assign<Rhs> BitXorAssign<Rhs>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub deref<Target> Deref<Target = Target>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub deref_mut<Target> DerefMut<Target = Target>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub div_assign<Rhs> DivAssign<Rhs>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub index<Idx: ?Sized, Output: ?Sized> Index<Idx, Output = Output>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub index_mut<Idx: ?Sized, Output: ?Sized> IndexMut<Idx, Output = Output>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub mul_assign<Rhs> MulAssign<Rhs>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub rem_assign<Rhs> RemAssign<Rhs>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub shl_assign<Rhs> ShlAssign<Rhs>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub shr_assign<Rhs> ShrAssign<Rhs>
+);
+declare_new_fns!(
+    #[crate = crate]
+    pub sub_assign<Rhs> SubAssign<Rhs>
+);
 
 /// A reference-to-value conversion.
 pub trait To<T> {
@@ -305,20 +436,23 @@ impl<T, F: Into<T> + Copy> To<T> for F {
     }
 }
 
-declare_new_fn!(<T>, To:<T>, pub to);
+declare_new_fns!(
+    #[crate = crate]
+    pub to<T> To<T>
+);
 
 #[cfg(feature = "alloc")]
 mod standard_alloc {
     extern crate alloc;
     use alloc::string::ToString;
 
-    use crate::declare_new_fn;
+    use crate::declare_new_fns;
 
-    declare_new_fn!(
+    declare_new_fns!(
+        #[crate = crate]
         #[cfg_attr(doc, doc(cfg(feature = "alloc")))]
         #[doc = feature_availability!("alloc")]
-        ToString,
-        pub to_string
+        pub to_string ToString
     );
 }
 #[cfg(feature = "alloc")]
@@ -328,29 +462,56 @@ pub use standard_alloc::*;
 mod standard_std {
     use std::{
         error::Error,
-        io::{Seek, Write},
+        io::{BufRead, IsTerminal, Read, Seek, Write},
+        net::ToSocketAddrs,
     };
 
-    use crate::declare_new_fn;
+    use crate::declare_new_fns;
 
-    declare_new_fn!(
+    declare_new_fns!(
+        #[crate = crate]
         #[cfg_attr(doc, doc(cfg(feature = "std")))]
         #[doc = feature_availability!("std")]
-        Error,
-        pub error,
+        pub error Error
     );
 
-    declare_new_fn!(
+    declare_new_fns!(
+        #[crate = crate]
         #[cfg_attr(doc, doc(cfg(feature = "std")))]
         #[doc = feature_availability!("std")]
-        Seek,
-        pub seek,
+        pub buf_read BufRead
     );
-    declare_new_fn!(
+    declare_new_fns!(
+        #[crate = crate]
         #[cfg_attr(doc, doc(cfg(feature = "std")))]
         #[doc = feature_availability!("std")]
-        Write,
-        pub io_write,
+        pub is_terminal IsTerminal
+    );
+    declare_new_fns!(
+        #[crate = crate]
+        #[cfg_attr(doc, doc(cfg(feature = "std")))]
+        #[doc = feature_availability!("std")]
+        pub io_read Read
+    );
+    declare_new_fns!(
+        #[crate = crate]
+        #[cfg_attr(doc, doc(cfg(feature = "std")))]
+        #[doc = feature_availability!("std")]
+        pub seek Seek
+    );
+    declare_new_fns!(
+        #[crate = crate]
+        #[cfg_attr(doc, doc(cfg(feature = "std")))]
+        #[doc = feature_availability!("std")]
+        pub io_write Write
+    );
+
+    declare_new_fns!(
+        #[crate = crate]
+        #[cfg_attr(doc, doc(cfg(feature = "std")))]
+        #[doc = feature_availability!("std")]
+        pub to_socket_addrs<Iter: core::iter::Iterator<Item = std::net::SocketAddr>>
+            ToSocketAddrs<Iter = Iter>
     );
 }
 #[cfg(feature = "std")]
@@ -393,19 +554,6 @@ mod test {
     }
 
     #[test]
-    fn test_as_ref() {
-        let a: Box<u8> = Box::new(5);
-        let b: Box<u8> = Box::new(7);
-
-        let array = [a, b];
-        let slice = as_ref::new::<u8, _>(&array);
-
-        for (i, y) in array.iter().enumerate() {
-            assert_eq!(slice.get(i).expect("expected an element").as_ref(), &**y);
-        }
-    }
-
-    #[test]
     fn test_borrow() {
         let a: Box<u8> = Box::new(5);
         let b: Box<u8> = Box::new(7);
@@ -440,6 +588,19 @@ mod test {
             assert!(element > &3);
             assert!(element == y);
             assert!(element < &10);
+        }
+    }
+
+    #[test]
+    fn test_as_ref() {
+        let a: Box<u8> = Box::new(5);
+        let b: Box<u8> = Box::new(7);
+
+        let array = [a, b];
+        let slice = as_ref::new::<u8, _>(&array);
+
+        for (i, y) in array.iter().enumerate() {
+            assert_eq!(slice.get(i).expect("expected an element").as_ref(), &**y);
         }
     }
 
@@ -483,6 +644,40 @@ mod test {
         for i in 0..array.len() {
             let element = slice.get(i).expect("expected an element");
             assert_eq!(format!("{element}"), displayed);
+        }
+    }
+
+    #[test]
+    fn test_hasher() {
+        use std::collections::hash_map::DefaultHasher;
+
+        const TEST_DATA: &[u8] = b"test hash data";
+
+        let mut reference = DefaultHasher::new();
+        reference.write(TEST_DATA);
+        let reference = reference.finish();
+
+        let mut array = [DefaultHasher::new(), DefaultHasher::new()];
+        let mut slice = hasher::new_mut(&mut array);
+
+        for hasher in &mut slice {
+            hasher.write(TEST_DATA);
+
+            assert_eq!(hasher.finish(), reference);
+        }
+    }
+
+    #[test]
+    fn test_iterator() {
+        let mut array = [(0..5), (10..15), (-30..-25)];
+        let mut slice = iterator::new_mut(&mut array);
+
+        for (range, expected) in slice.iter_mut().zip([0, 10, -30]) {
+            assert_eq!(range.next(), Some(expected));
+        }
+
+        for (range, expected) in slice.iter_mut().zip([1, 11, -29]) {
+            assert_eq!(range.next(), Some(expected));
         }
     }
 

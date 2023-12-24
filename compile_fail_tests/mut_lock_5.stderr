@@ -5,7 +5,7 @@ error[E0502]: cannot borrow `slice_1` as immutable because it is also borrowed a
   |             ------------------ mutable borrow occurs here
   |
   |     let element = slice_1.get(1).unwrap();
-  |                   ^^^^^^^^^^^^^^
-  |                   |
-  |                   immutable borrow occurs here
-  |                   mutable borrow later used here
+  |                   ^^^^^^^^^^^^^^ immutable borrow occurs here
+  |
+  |     a.borrow();
+  |     ---------- mutable borrow later used here

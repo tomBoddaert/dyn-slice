@@ -1,7 +1,7 @@
 // Enable the required features (nightly must be used)
-#![feature(ptr_metadata, pointer_byte_offsets)]
+#![feature(ptr_metadata)]
 
-use dyn_slice::declare_new_fn;
+use dyn_slice::declare_new_fns;
 
 // Create our custom trait
 pub trait MyTrait {
@@ -31,35 +31,36 @@ impl MyTrait for u16 {
     }
 }
 
-// Declare and import the `new` function
-declare_new_fn!(MyTrait, my_trait_dyn_slice);
-use my_trait_dyn_slice::new as new_dyn_slice;
+// Declare new functions for dyn slices of the trait
+declare_new_fns!(
+    my_trait_slice MyTrait
+);
 
 fn main() {
     let array: [u8; 4] = [1, 2, 3, 4];
 
     // Create the first dyn slice
-    let dyn_slice = new_dyn_slice(&array);
+    let slice = my_trait_slice::new(&array);
 
     // Get the first and last elements as u64
-    let first = dyn_slice.first().map(MyTrait::to_u64);
-    let last = dyn_slice.last().map(MyTrait::to_u64);
+    let first = slice.first().map(MyTrait::to_u64);
+    let last = slice.last().map(MyTrait::to_u64);
 
     println!("1: first: {first:?}, last: {last:?}");
 
     let array2: [u16; 3] = [5, 6, 7];
 
     // Create the second dyn slice
-    let dyn_slice2 = new_dyn_slice(&array2);
+    let slice2 = my_trait_slice::new(&array2);
 
     // Get the first and last elements as u64
-    let first = dyn_slice2.first().map(MyTrait::to_u64);
-    let last = dyn_slice2.last().map(MyTrait::to_u64);
+    let first = slice2.first().map(MyTrait::to_u64);
+    let last = slice2.last().map(MyTrait::to_u64);
 
     println!("2: first: {first:?}, last: {last:?}\n");
 
     // Print the sum of each pair from the dyn slices
-    let iter = dyn_slice.iter().zip(dyn_slice2.iter());
+    let iter = slice.iter().zip(slice2.iter());
     for (i, (a, b)) in iter.enumerate() {
         println!("sum {}: {}", i + 1, a.add(b.to_u64()));
     }

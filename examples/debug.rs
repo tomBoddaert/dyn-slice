@@ -1,8 +1,5 @@
 // A dyn slice of any trait that requires Debug can be debug printed.
-// For example, DynSlice<dyn Error> or DynSlice<dyn Dyn>.
-
-// Enable the required features (nightly must be used)
-#![feature(ptr_metadata, pointer_byte_offsets)]
+// For example, DynSlice<dyn Error>.
 
 use dyn_slice::standard::debug;
 

@@ -1,13 +1,13 @@
 [package]
 name = "dyn-slice"
-version = "3.2.0-alpha.2"
-authors = ["Tom Boddaert"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 description = "&dyn [Trait] implementation, inspired by a Reddit thread."
 readme = "README.md"
-homepage = "https://github.com/tomBoddaert/dyn-slice/"
-repository = "https://github.com/tomBoddaert/dyn-slice/"
-license = "MIT OR Apache-2.0"
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
 keywords = ["dyn", "slice", "traits"]
 categories = ["data-structures", "no-std"]
 
@@ -22,5 +22,22 @@ default = ["std", "alloc"]
 std = ["alloc"]
 alloc = []
 
+[dependencies]
+dyn-slice-macros = { path = "dyn-slice-macros" }
+
 [dev-dependencies]
 trybuild = { version = "1.0.82", features = ["diff"] }
+
+[workspace]
+resolver = "2"
+members = [
+  "dyn-slice-macros"
+]
+
+[workspace.package]
+version = "3.2.0-alpha.3"
+authors = ["Tom Boddaert"]
+edition = "2021"
+homepage = "https://github.com/tomBoddaert/dyn-slice/"
+repository = "https://github.com/tomBoddaert/dyn-slice/"
+license = "MIT OR Apache-2.0"

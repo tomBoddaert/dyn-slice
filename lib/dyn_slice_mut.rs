@@ -5,7 +5,7 @@ use core::{
     slice,
 };
 
-use crate::{DynSlice, IterMut};
+use crate::{DynSlice, Iter, IterMut};
 
 /// `&mut dyn [Trait]`
 #[repr(transparent)]
@@ -243,7 +243,7 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
     #[inline]
     #[must_use]
     /// Returns a mutable iterator over the slice.
-    pub fn iter_mut(&'a mut self) -> IterMut<'a, Dyn> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, Dyn> {
         IterMut {
             // SAFETY:
             // The created slice is from index 0 and has the same length as the
@@ -289,13 +289,38 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> IntoIterator for Dy
     }
 }
 
+impl<'a, 'b, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> IntoIterator
+    for &'b mut DynSliceMut<'a, Dyn>
+{
+    type IntoIter = IterMut<'b, Dyn>;
+    type Item = &'b mut Dyn;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
+
+impl<'a, 'b, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> IntoIterator
+    for &'b DynSliceMut<'a, Dyn>
+{
+    type IntoIter = Iter<'b, Dyn>;
+    type Item = &'b Dyn;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use core::{fmt::Display, ptr::addr_of};
 
-    use crate::{declare_new_fn, standard::partial_eq, DynSliceMut};
+    use crate::{declare_new_fns, standard::partial_eq, DynSliceMut};
 
-    declare_new_fn!(Display, display_dyn_slice);
+    declare_new_fns!(
+        #[crate = crate]
+        display_dyn_slice Display
+    );
     pub use display_dyn_slice::new_mut as new_display_dyn_slice;
 
     #[test]

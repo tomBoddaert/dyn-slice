@@ -273,7 +273,7 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
     #[inline]
     #[must_use]
     /// Returns an iterator over the slice.
-    pub const fn iter(&'a self) -> Iter<'a, Dyn> {
+    pub const fn iter(&self) -> Iter<'_, Dyn> {
         Iter { slice: *self }
     }
 }
@@ -300,8 +300,21 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> IntoIterator for Dy
     type IntoIter = Iter<'a, Dyn>;
     type Item = &'a Dyn;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         Iter { slice: self }
+    }
+}
+
+impl<'a, 'b, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> IntoIterator
+    for &'b DynSlice<'a, Dyn>
+{
+    type IntoIter = Iter<'b, Dyn>;
+    type Item = &'b Dyn;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 
@@ -309,9 +322,12 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> IntoIterator for Dy
 mod test {
     use core::{fmt::Display, ptr::addr_of};
 
-    use crate::{declare_new_fn, standard::partial_eq, DynSlice};
+    use crate::{declare_new_fns, standard::partial_eq, DynSlice};
 
-    declare_new_fn!(Display, display_dyn_slice);
+    declare_new_fns!(
+        #[crate = crate]
+        display_dyn_slice Display
+    );
     pub use display_dyn_slice::new as new_display_dyn_slice;
 
     #[test]

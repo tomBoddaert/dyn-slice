@@ -1,28 +1,27 @@
 // Enable the required features (nightly must be used)
-#![feature(ptr_metadata, pointer_byte_offsets)]
+#![feature(ptr_metadata)]
 
-use dyn_slice::declare_new_fn;
+use dyn_slice::declare_new_fns;
 use std::fmt::Display;
 
-// Declare and import the `new` function
+// Declare the `new` function
 // (or you can use `dyn_slice::standard::display::new`
-declare_new_fn!(Display, display_dyn_slice);
-use display_dyn_slice::new as new_dyn_slice;
+declare_new_fns!(display_slice Display);
 
 fn main() {
     let array: [u8; 4] = [1, 2, 3, 4];
 
     // Create the first dyn slice
-    let dyn_slice = new_dyn_slice(&array);
+    let slice = display_slice::new(&array);
 
     let array2: [i16; 3] = [5, 6, 7];
 
     // Create the second dyn slice
-    let dyn_slice2 = new_dyn_slice(&array2);
+    let slice2 = display_slice::new(&array2);
 
     // The iterators can be chained because they are iterators
     // over `&dyn Display` rather than over the underlying types
-    let iter = dyn_slice.iter().chain(dyn_slice2.iter());
+    let iter = slice.iter().chain(slice2.iter());
     for n in iter {
         println!("{n}");
     }

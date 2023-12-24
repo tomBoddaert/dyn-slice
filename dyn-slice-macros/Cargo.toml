@@ -1,0 +1,23 @@
+[package]
+name = "dyn-slice-macros"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Macros for the dyn-slice crate"
+readme = "README.md"
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords = ["macro", "macros"]
+categories = ["data-structures"]
+
+[lib]
+name = "dyn_slice_macros"
+edition = "2021"
+path = "lib/lib.rs"
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = "2.0"
