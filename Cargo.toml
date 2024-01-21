@@ -23,7 +23,7 @@ std = ["alloc"]
 alloc = []
 
 [dependencies]
-dyn-slice-macros = { path = "dyn-slice-macros", version = "3.2.0-alpha.3" }
+dyn-slice-macros = { path = "dyn-slice-macros", version = "3.2.0" }
 
 [dev-dependencies]
 trybuild = { version = "1.0.82", features = ["diff"] }
@@ -35,7 +35,7 @@ members = [
 ]
 
 [workspace.package]
-version = "3.2.0-alpha.3"
+version = "3.2.0"
 authors = ["Tom Boddaert"]
 edition = "2021"
 homepage = "https://github.com/tomBoddaert/dyn-slice/"

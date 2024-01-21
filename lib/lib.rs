@@ -12,7 +12,7 @@
 //!
 //! # Standard new dyn slice functions
 //!
-//! There are some pre-made new functions for common traits in [`standard`]
+//! There are some pre-made new functions for common traits in [`standard`].
 
 #![feature(ptr_metadata, pointer_byte_offsets)]
 #![cfg_attr(doc, feature(doc_cfg))]
@@ -40,7 +40,7 @@ mod dyn_slice;
 mod dyn_slice_mut;
 mod iter;
 mod iter_mut;
-/// Dyn slice `new` and `new_mut` definitions for some common traits
+/// Dyn slice `new` and `new_mut` definitions for some common traits.
 ///
 /// If you want a dyn slice for a trait that is not here, use the [`declare_new_fns`] macro.
 pub mod standard;
@@ -50,15 +50,15 @@ pub use dyn_slice_mut::*;
 pub use iter::*;
 pub use iter_mut::*;
 
-/// Declare `new` and `new_mut` functions for dyn slices of a trait
+/// Declare `new` and `new_mut` functions for dyn slices of a trait.
 ///
 /// # Syntax
 /// ```text
 /// declare_new_fns!(
 ///     #[attributes]
-///     pub name<generics> Trait<parameters>
+///     pub name<parameters> Trait<arguments>
 ///     where
-///         generic: bounds,
+///         parameter: bounds,
 /// );
 /// ```
 ///
@@ -70,7 +70,7 @@ pub use iter_mut::*;
 /// #![feature(ptr_metadata)]
 /// # use dyn_slice::declare_new_fns;
 /// declare_new_fns!(
-///     display_slice ::std::fmt::Display
+///     display_slice std::fmt::Display
 /// );
 /// ```
 ///
@@ -78,7 +78,7 @@ pub use iter_mut::*;
 #[doc = concat!("There are more examples of how to use [`declare_new_fns`] in the [examples directory](https://docs.rs/crate/dyn-slice/", env!("CARGO_PKG_VERSION"), "/source/examples/).")]
 ///
 /// # Use from other crates
-/// When using `dyn_slice` from crates that re-export it, you may need to add a crate attribute, for example:
+/// When using `dyn_slice` from crates that re-export it, you may need to add a `crate` attribute, for example:
 /// ```text
 /// declare_new_fns!(
 ///     #[crate = other_crate::dyn_slice]
@@ -87,12 +87,10 @@ pub use iter_mut::*;
 /// ```
 pub use dyn_slice_macros::declare_new_fns;
 
-#[doc(hidden)]
 #[deprecated(
     since = "3.2.0",
     note = "this has been replaced with `declare_new_fns`. Convert to the new macro or expand this one"
 )]
-#[allow(clippy::crate_in_macro_def)]
 #[macro_export]
 /// DEPRECATED, use [`declare_new_fns`] instead!
 ///

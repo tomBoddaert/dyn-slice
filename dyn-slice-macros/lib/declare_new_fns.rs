@@ -3,6 +3,7 @@ use quote::quote;
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
+    spanned::Spanned,
     Attribute, Error, Expr, ExprPath, GenericArgument, GenericParam, Generics, Ident, Lifetime,
     Meta, Path, PathSegment, Token, TypeParamBound, TypePath, Visibility, WhereClause,
 };
@@ -76,8 +77,10 @@ fn parse_optional_generics(input: ParseStream) -> syn::Result<Generics> {
     }
 }
 
-impl From<DeclareNewFns> for TokenStream {
-    fn from(value: DeclareNewFns) -> Self {
+impl TryFrom<DeclareNewFns> for TokenStream {
+    type Error = syn::Error;
+
+    fn try_from(value: DeclareNewFns) -> syn::Result<Self> {
         let DeclareNewFns {
             mut attrs,
             vis,
@@ -89,7 +92,7 @@ impl From<DeclareNewFns> for TokenStream {
         // Get the dyn-slice crate path
         let crate_ = match get_crate(&mut attrs) {
             Ok(path) => path,
-            Err(err) => return err.into_compile_error(),
+            Err(err) => return Err(err),
         };
 
         let mut generic_idents: Vec<String> =
@@ -101,21 +104,17 @@ impl From<DeclareNewFns> for TokenStream {
         }));
 
         // Create a clone before editing
-        // let outer_trait_paths = traits.clone();
         let outer_trait_object = object_bounds.clone();
 
         // Make paths inner paths
-        // traits
-        //     .iter_mut()
-        //     .for_each(|path| make_inner_path(path, &generic_idents));
         for bound in &mut object_bounds
             .iter_mut()
             .filter_map(type_param_bound_select_trait)
         {
-            make_inner_path(&mut bound.path, &generic_idents);
+            make_inner_path(&mut bound.path, &generic_idents)?;
         }
 
-        make_generics_inner_path(&mut generics, &generic_idents);
+        make_generics_inner_path(&mut generics, &generic_idents)?;
 
         // Get the path of the trait for documentation
         // This is done as a string rather than using `r#trait` in the quote
@@ -131,7 +130,7 @@ impl From<DeclareNewFns> for TokenStream {
                 }
             })
             .map(stringify_basic_path)
-            .collect();
+            .collect::<Result<_, syn::Error>>()?;
         let mut inner_trait_paths: Vec<String> = object_bounds
             .iter()
             .filter_map(|bound| {
@@ -142,7 +141,7 @@ impl From<DeclareNewFns> for TokenStream {
                 }
             })
             .map(stringify_basic_path)
-            .collect();
+            .collect::<Result<_, syn::Error>>()?;
         // let mut inner_trait_paths: Vec<String> = traits.iter().map(stringify_basic_path).collect();
 
         // Get the trait names for documentation
@@ -159,11 +158,10 @@ impl From<DeclareNewFns> for TokenStream {
                 r#trait
                     .segments
                     .last()
-                    .expect("empty trait path")
-                    .ident
-                    .to_string()
+                    .map(|segment| segment.ident.to_string())
+                    .ok_or_else(|| syn::Error::new(r#trait.span(), "empty trait path"))
             })
-            .collect();
+            .collect::<Result<_, syn::Error>>()?;
 
         // Get the first of the trait documentation to put before the first '+'
         let trait_docs = TraitDocs {
@@ -186,7 +184,12 @@ impl From<DeclareNewFns> for TokenStream {
             object_bounds,
         };
 
-        declare_new_fns_quote(data, &crate_, trait_docs, auto_trait_docs)
+        Ok(declare_new_fns_quote(
+            data,
+            &crate_,
+            trait_docs,
+            auto_trait_docs,
+        ))
     }
 }
 
@@ -298,7 +301,7 @@ fn declare_new_fns_quote(
     let arguments = get_arguments(full_generics);
 
     quote! {
-        #[doc = concat!("new functions for `&dyn [`[`", #trait_name, "`](", #trait_outer_path, ")", #( "` + `[`", #auto_trait_names, "`](", #auto_trait_outer_paths, ")" ,)* "`]`")]
+        #[doc = concat!("New functions for `&(mut) dyn [`[`", #trait_name, "`](", #trait_outer_path, ")", #( "` + `[`", #auto_trait_names, "`](", #auto_trait_outer_paths, ")" ,)* "`]`.")]
         #( #attrs )*
         #vis mod #ident {
             use core::{
@@ -309,18 +312,18 @@ fn declare_new_fns_quote(
             use #crate_ as dyn_slice;
             use dyn_slice::{DynSlice, DynSliceMut};
 
-            #[doc = concat!("An alias for `dyn `[`", #trait_name, "`](", #trait_inner_path, ")" #(, "` + `[`", #auto_trait_names, "`](", #auto_trait_inner_paths, ")" )*)]
+            #[doc = concat!("An alias for `dyn `[`", #trait_name, "`](", #trait_inner_path, ")" #(, "` + `[`", #auto_trait_names, "`](", #auto_trait_inner_paths, ")" )*, ".")]
             pub type Dyn<#stripped_generics> = dyn #object_bounds;
 
-            #[doc = concat!("An alias for `&dyn [`[`", #trait_name, "`](", #trait_inner_path, ")", #( "` + `[`", #auto_trait_names, "`](", #auto_trait_inner_paths, ")" ,)* "`]` ([`DynSlice<Dyn>`])")]
+            #[doc = concat!("An alias for `&dyn [`[`", #trait_name, "`](", #trait_inner_path, ")", #( "` + `[`", #auto_trait_names, "`](", #auto_trait_inner_paths, ")" ,)* "`]` ([`DynSlice<Dyn>`]).")]
             pub type Slice<'__slice, #stripped_generics> = DynSlice<'__slice, Dyn<#arguments>>;
 
-            #[doc = concat!("An alias for `&mut dyn [`[`", #trait_name, "`](", #trait_inner_path, ")", #( "` + `[`", #auto_trait_names, "`](", #auto_trait_inner_paths, ")" ,)* "`]` ([`DynSliceMut<Dyn>`])")]
+            #[doc = concat!("An alias for `&mut dyn [`[`", #trait_name, "`](", #trait_inner_path, ")", #( "` + `[`", #auto_trait_names, "`](", #auto_trait_inner_paths, ")" ,)* "`]` ([`DynSliceMut<Dyn>`]).")]
             pub type SliceMut<'__slice, #stripped_generics> = DynSliceMut<'__slice, Dyn<#arguments>>;
 
             #[allow(unused)]
             #[must_use]
-            #[doc = concat!("Create a dyn slice from a slice of a type that implements [`", #trait_name, "`](", #trait_inner_path, ")" #(, "` + `[`", #auto_trait_names, "`](", #auto_trait_inner_paths, ")" )*)]
+            #[doc = concat!("Create a dyn slice from a slice of a type that implements [`", #trait_name, "`](", #trait_inner_path, ")" #(, "` + `[`", #auto_trait_names, "`](", #auto_trait_inner_paths, ")" )*, ".")]
             pub fn new<#full_generics DynSliceFromType>(value: &[DynSliceFromType]) -> Slice<'_, #arguments>
             where
                 Dyn<#arguments>: Pointee<Metadata = DynMetadata<Dyn<#arguments>>>,
@@ -346,7 +349,7 @@ fn declare_new_fns_quote(
 
             #[allow(unused)]
             #[must_use]
-            #[doc = concat!("Create a mutable dyn slice from a mutable slice of a type that implements [`", #trait_name, "`](", #trait_inner_path, ")" #(, "` + `[`", #auto_trait_names, "`](", #auto_trait_inner_paths, ")" )*)]
+            #[doc = concat!("Create a mutable dyn slice from a mutable slice of a type that implements [`", #trait_name, "`](", #trait_inner_path, ")" #(, "` + `[`", #auto_trait_names, "`](", #auto_trait_inner_paths, ")" )*, ".")]
             pub fn new_mut<#full_generics DynSliceFromType>(value: &mut [DynSliceFromType]) -> SliceMut<'_, #arguments>
             where
                 Dyn<#arguments>: Pointee<Metadata = DynMetadata<Dyn<#arguments>>>,

@@ -7,7 +7,7 @@ use core::{
 use crate::DynSlice;
 
 /// Dyn slice iterator
-pub struct Iter<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>> + 'a> {
+pub struct Iter<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> {
     pub(crate) slice: DynSlice<'a, Dyn>,
 }
 

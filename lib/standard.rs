@@ -1,7 +1,7 @@
 use core::{
     any::Any,
     borrow::{Borrow, BorrowMut},
-    cmp::{PartialEq, PartialOrd},
+    cmp::{Ordering, PartialEq, PartialOrd},
     convert::{AsMut, AsRef},
     fmt::{
         self, Binary, Debug, Display, LowerExp, LowerHex, Octal, Pointer, UpperExp, UpperHex, Write,
@@ -183,8 +183,7 @@ declare_new_fns!(
     ///
     /// `DynSlice(Mut)<dyn PartialEq<Rhs>>` implements `PartialEq<[Rhs]>`
     ///
-    /// # Examples
-    ///
+    /// # Example
     /// ```
     /// # use dyn_slice::standard::partial_eq;
     /// let array: [u8; 4] = [1, 2, 4, 8];
@@ -231,8 +230,70 @@ impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + PartialEq<Rhs> + ?Sized, Rh
 }
 declare_new_fns!(
     #[crate = crate]
+    ///
+    /// `DynSlice(Mut)<dyn PartialOrd<Rhs>>` implements `PartialOrd<[Rhs]>`.
+    /// Slices are compared [lexicographically](https://doc.rust-lang.org/stable/std/cmp/trait.Ord.html#lexicographical-comparison).
+    ///
+    /// # Example
+    /// ```
+    /// # use dyn_slice::standard::partial_ord;
+    /// let array: [u8; 4] = [1, 2, 4, 8];
+    /// let slice = partial_ord::new(&array);
+    ///
+    /// assert!(slice > &[1, 2, 3, 4][..]);
+    /// assert!(slice == &array[..]);
+    /// assert!(slice < &[1, 2, 4, 8, 16][..]);
+    /// ```
     pub partial_ord<Rhs> PartialOrd<Rhs>
 );
+/// Implements comparison of slices [lexicographically](https://doc.rust-lang.org/stable/std/cmp/trait.Ord.html#lexicographical-comparison).
+impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + PartialOrd<Rhs> + ?Sized, Rhs>
+    PartialOrd<[Rhs]> for DynSlice<'a, Dyn>
+{
+    fn partial_cmp(&self, other: &[Rhs]) -> Option<Ordering> {
+        let mut i1 = self.iter();
+        let mut i2 = other.iter();
+
+        loop {
+            return Some(match (i1.next(), i2.next()) {
+                (Some(a), Some(b)) => match a.partial_cmp(b)? {
+                    Ordering::Equal => continue,
+                    order => order,
+                },
+                (Some(_), None) => Ordering::Greater,
+                (None, Some(_)) => Ordering::Less,
+                (None, None) => Ordering::Equal,
+            });
+        }
+    }
+}
+/// Implements comparison of slices [lexicographically](https://doc.rust-lang.org/stable/std/cmp/trait.Ord.html#lexicographical-comparison).
+impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + PartialOrd<Rhs> + ?Sized, Rhs>
+    PartialOrd<[Rhs]> for DynSliceMut<'a, Dyn>
+{
+    #[inline]
+    fn partial_cmp(&self, other: &[Rhs]) -> Option<Ordering> {
+        self.0.partial_cmp(other)
+    }
+}
+/// Implements comparison of slices [lexicographically](https://doc.rust-lang.org/stable/std/cmp/trait.Ord.html#lexicographical-comparison).
+impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + PartialOrd<Rhs> + ?Sized, Rhs>
+    PartialOrd<&[Rhs]> for DynSlice<'a, Dyn>
+{
+    #[inline]
+    fn partial_cmp(&self, other: &&[Rhs]) -> Option<Ordering> {
+        self.partial_cmp(*other)
+    }
+}
+/// Implements comparison of slices [lexicographically](https://doc.rust-lang.org/stable/std/cmp/trait.Ord.html#lexicographical-comparison).
+impl<'a, Dyn: Pointee<Metadata = DynMetadata<Dyn>> + PartialOrd<Rhs> + ?Sized, Rhs>
+    PartialOrd<&[Rhs]> for DynSliceMut<'a, Dyn>
+{
+    #[inline]
+    fn partial_cmp(&self, other: &&[Rhs]) -> Option<Ordering> {
+        self.0.partial_cmp(*other)
+    }
+}
 
 declare_new_fns!(
     #[crate = crate]
@@ -250,8 +311,7 @@ declare_new_fns!(
 declare_new_fns!(
     #[crate = crate]
     ///
-    /// # Examples
-    ///
+    /// # Example
     /// ```
     /// # use dyn_slice::standard::debug;
     /// let array: [u8; 4] = [1, 2, 4, 8];
@@ -338,6 +398,21 @@ declare_new_fns!(
 
 declare_new_fns!(
     #[crate = crate]
+    ///
+    /// # Example
+    /// ```
+    /// # use dyn_slice::standard::double_ended_iterator;
+    /// let mut array = [[1, 2].into_iter(), [3, 4].into_iter(), [5, 6].into_iter()];
+    /// let mut slice = double_ended_iterator::new_mut(&mut array);
+    /// let mut iter = slice.iter_mut().flatten();
+    ///
+    /// assert_eq!(iter.next_back().unwrap(), 6);
+    /// assert_eq!(iter.next_back().unwrap(), 5);
+    /// assert_eq!(iter.next_back().unwrap(), 4);
+    /// assert_eq!(iter.next_back().unwrap(), 3);
+    /// assert_eq!(iter.next_back().unwrap(), 2);
+    /// assert_eq!(iter.next_back().unwrap(), 1);
+    /// ```
     pub double_ended_iterator<Item> DoubleEndedIterator<Item = Item>
 );
 declare_new_fns!(
@@ -349,8 +424,11 @@ declare_new_fns!(
     pub fused_iterator<Item> FusedIterator<Item = Item>
 );
 declare_new_fns!(
+    #[crate = crate]
     ///
-    /// ```rust
+    /// # Examples
+    ///
+    /// ```
     /// # use dyn_slice::standard::iterator;
     /// let mut array = [(1..5), (2..9), (4..6)];
     /// let mut slice = iterator::new_mut(&mut array);
@@ -361,7 +439,20 @@ declare_new_fns!(
     ///
     /// assert_eq!(slice[0].next(), Some(2));
     /// ```
-    #[crate = crate]
+    ///
+    /// ```
+    /// # use dyn_slice::standard::iterator;
+    /// let mut array = [[1, 2].into_iter(), [3, 4].into_iter(), [5, 6].into_iter()];
+    /// let mut slice = iterator::new_mut(&mut array);
+    /// let mut iter = slice.iter_mut().flatten();
+    ///
+    /// assert_eq!(iter.next().unwrap(), 1);
+    /// assert_eq!(iter.next().unwrap(), 2);
+    /// assert_eq!(iter.next().unwrap(), 3);
+    /// assert_eq!(iter.next().unwrap(), 4);
+    /// assert_eq!(iter.next().unwrap(), 5);
+    /// assert_eq!(iter.next().unwrap(), 6);
+    /// ```
     pub iterator<Item> Iterator<Item = Item>
 );
 
@@ -579,6 +670,30 @@ mod test {
     }
 
     #[test]
+    fn test_partial_eq_impl() {
+        let s: &[u8] = &[10, 11, 12];
+        let slice = partial_eq::new::<u8, _>(s);
+
+        let ne1: &[u8] = &[10, 11, 22];
+        let ne2: &[u8] = &[10, 21, 12];
+        let ne3: &[u8] = &[20, 11, 12];
+        let ne4: &[u8] = &[10, 11, 12, 13];
+        let ne5: &[u8] = &[10, 11];
+        let ne6: &[u8] = &[10];
+        let ne7: &[u8] = &[];
+
+        assert!(slice == s);
+
+        assert!(slice != ne1);
+        assert!(slice != ne2);
+        assert!(slice != ne3);
+        assert!(slice != ne4);
+        assert!(slice != ne5);
+        assert!(slice != ne6);
+        assert!(slice != ne7);
+    }
+
+    #[test]
     fn test_partial_ord() {
         let array: [u8; 2] = [5, 7];
         let slice = partial_ord::new::<u8, _>(&array);
@@ -589,6 +704,48 @@ mod test {
             assert!(element == y);
             assert!(element < &10);
         }
+    }
+
+    #[test]
+    fn test_partial_ord_impl() {
+        let s: &[u8] = &[10, 11, 12];
+        let slice = partial_ord::new::<u8, _>(s);
+
+        let l1: &[u8] = &[10, 11, 2];
+        let l2: &[u8] = &[10, 1, 12];
+        let l3: &[u8] = &[0, 11, 12];
+        let l4: &[u8] = &[10, 11, 2, 3];
+        let l5: &[u8] = &[10, 1, 12, 3];
+        let l6: &[u8] = &[0, 11, 12, 3];
+        let l7: &[u8] = &[10, 11];
+        let l8: &[u8] = &[10];
+        let l9: &[u8] = &[];
+
+        let g1: &[u8] = &[10, 11, 22];
+        let g2: &[u8] = &[10, 21, 12];
+        let g3: &[u8] = &[20, 11, 12];
+        let g4: &[u8] = &[10, 21];
+        let g5: &[u8] = &[20];
+        let g6: &[u8] = &[10, 11, 12, 3];
+
+        assert_eq!(slice.partial_cmp(s), Some(Ordering::Equal));
+
+        assert!(s > l1);
+        assert!(s > l2);
+        assert!(s > l3);
+        assert!(s > l4);
+        assert!(s > l5);
+        assert!(s > l6);
+        assert!(s > l7);
+        assert!(s > l8);
+        assert!(s > l9);
+
+        assert!(s < g1);
+        assert!(s < g2);
+        assert!(s < g3);
+        assert!(s < g4);
+        assert!(s < g5);
+        assert!(s < g6);
     }
 
     #[test]

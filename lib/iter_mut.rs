@@ -7,7 +7,7 @@ use core::{
 use crate::DynSliceMut;
 
 /// Mutable dyn slice iterator
-pub struct IterMut<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>> + 'a> {
+pub struct IterMut<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> {
     pub(crate) slice: DynSliceMut<'a, Dyn>,
 }
 

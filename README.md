@@ -2,7 +2,9 @@
 
 # Dyn-Slice
 
-An implementation for a `&dyn [Trait]`-like reference, inspired by a [Reddit thread](https://www.reddit.com/r/rust/comments/14i08gz/dyn_slices).
+An implementation of a `&dyn [Trait]`-like reference, inspired by a [Reddit thread](https://www.reddit.com/r/rust/comments/14i08gz/dyn_slices).
+
+`dyn-slice`s are slices of trait object. Indexing into one yields a trait object reference. The vtable pointer is only stored once.
 
 ```sh
 cargo add dyn-slice

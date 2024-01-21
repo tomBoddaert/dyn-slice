@@ -21,15 +21,17 @@ mod declare_new_fns;
 use declare_new_fns::DeclareNewFns;
 mod path_ext;
 use proc_macro2::TokenStream;
-use syn::{Path, TraitBound, TypeParamBound};
+use syn::{spanned::Spanned, Path, TraitBound, TypeParamBound};
 
 #[proc_macro]
 pub fn declare_new_fns(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input: DeclareNewFns = syn::parse_macro_input!(input);
-    TokenStream::from(input).into()
+    TokenStream::try_from(input)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
 }
 
-fn stringify_basic_path(path: &Path) -> String {
+fn stringify_basic_path(path: &Path) -> syn::Result<String> {
     path.segments
         .iter()
         .map(|x| x.ident.to_string())
@@ -38,7 +40,7 @@ fn stringify_basic_path(path: &Path) -> String {
             acc.push_str(&curr);
             acc
         })
-        .expect("empty path")
+        .ok_or_else(|| syn::Error::new(path.span(), "empty path"))
 }
 
 fn type_param_bound_select_trait(bound: &mut TypeParamBound) -> Option<&mut TraitBound> {

@@ -10,6 +10,17 @@ use core::{
 use crate::Iter;
 
 /// `&dyn [Trait]`
+///
+/// A type erased slice of elements that implement a trait.
+///
+/// # Example
+/// ```
+/// use dyn_slice::standard::debug;
+///
+/// let slice = debug::new(&[1, 2, 3, 4, 5]);
+/// # assert_eq!(&format!("{slice:?}"), "[1, 2, 3, 4, 5]");
+/// println!("{slice:?}"); // [1, 2, 3, 4, 5]
+/// ```
 pub struct DynSlice<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> {
     pub(crate) vtable_ptr: *const (),
     pub(crate) len: usize,
@@ -117,6 +128,14 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
     #[inline]
     #[must_use]
     /// Returns the number of elements in the slice.
+    ///
+    /// # Example
+    /// ```
+    /// use dyn_slice::standard::debug;
+    ///
+    /// let slice = debug::new(&[1, 2, 3, 4, 5]);
+    /// assert_eq!(slice.len(), 5);
+    /// ```
     pub const fn len(&self) -> usize {
         self.len
     }
@@ -131,6 +150,17 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
     #[inline]
     #[must_use]
     /// Returns `true` if the slice has a length of 0.
+    ///
+    /// # Example
+    /// ```
+    /// use dyn_slice::standard::debug;
+    ///
+    /// let slice = debug::new(&[1, 2, 3, 4, 5]);
+    /// assert!(!slice.is_empty());
+    ///
+    /// let empty_slice = debug::new::<u8>(&[]);
+    /// assert!(empty_slice.is_empty());
+    /// ```
     pub const fn is_empty(&self) -> bool {
         self.len == 0
     }
@@ -154,6 +184,19 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
 
     #[must_use]
     /// Returns a reference to the first element of the slice, or `None` if it is empty.
+    ///
+    /// # Example
+    /// ```
+    /// use dyn_slice::standard::debug;
+    ///
+    /// let slice = debug::new(&[1, 2, 3, 4, 5]);
+    /// # assert_eq!(format!("{:?}", slice.first().unwrap()), "1");
+    /// println!("{:?}", slice.first()); // Some(1)
+    ///
+    /// let empty_slice = debug::new::<u8>(&[]);
+    /// # assert!(empty_slice.first().is_none());
+    /// println!("{:?}", empty_slice.first()); // None
+    /// ```
     pub fn first(&self) -> Option<&Dyn> {
         (!self.is_empty()).then(|| {
             // SAFETY:
@@ -165,6 +208,19 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
 
     #[must_use]
     /// Returns a reference to the last element of the slice, or `None` if it is empty.
+    ///
+    /// # Example
+    /// ```
+    /// use dyn_slice::standard::debug;
+    ///
+    /// let slice = debug::new(&[1, 2, 3, 4, 5]);
+    /// # assert_eq!(format!("{:?}", slice.last().unwrap()), "5");
+    /// println!("{:?}", slice.last()); // Some(5)
+    ///
+    /// let empty_slice = debug::new::<u8>(&[]);
+    /// # assert!(empty_slice.last().is_none());
+    /// println!("{:?}", empty_slice.last()); // None
+    /// ```
     pub fn last(&self) -> Option<&Dyn> {
         (!self.is_empty()).then(|| {
             // SAFETY:
@@ -176,6 +232,17 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
 
     #[must_use]
     /// Returns a reference to the element at the given `index` or `None` if the `index` is out of bounds.
+    ///
+    /// # Example
+    /// ```
+    /// use dyn_slice::standard::debug;
+    ///
+    /// let slice = debug::new(&[1, 2, 3, 4, 5]);
+    /// # assert_eq!(format!("{:?}", slice.get(2).unwrap()), "3");
+    /// println!("{:?}", slice.get(2)); // Some(3)
+    /// # assert!(slice.get(5).is_none());
+    /// println!("{:?}", slice.get(5)); // None
+    /// ```
     pub fn get(&self, index: usize) -> Option<&Dyn> {
         (index < self.len).then(|| {
             // SAFETY:
@@ -232,6 +299,22 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
 
     #[must_use]
     /// Returns a sub-slice from the `start` index with the `len` or `None` if the slice is out of bounds.
+    ///
+    /// # Example
+    /// ```
+    /// use dyn_slice::standard::debug;
+    ///
+    /// let slice = debug::new(&[1, 2, 3, 4, 5]);
+    /// println!("{slice:?}"); // [1, 2, 3, 4, 5]
+    /// # assert_eq!(format!("{:?}", slice.slice(1..4).unwrap()), "[2, 3, 4]");
+    /// println!("{:?}", slice.slice(1..4)); // Some([2, 3, 4])
+    /// # assert_eq!(format!("{:?}", slice.slice(2..).unwrap()), "[3, 4, 5]");
+    /// println!("{:?}", slice.slice(2..)); // Some([3, 4, 5])
+    /// # assert_eq!(format!("{:?}", slice.slice(5..).unwrap()), "[]");
+    /// println!("{:?}", slice.slice(5..)); // Some([])
+    /// # assert!(slice.slice(6..).is_none());
+    /// println!("{:?}", slice.slice(6..)); // None
+    /// ```
     pub fn slice<R: RangeBounds<usize>>(&self, range: R) -> Option<DynSlice<Dyn>> {
         // NOTE: DO NOT MAKE THIS FUNCTION RETURN `Self` as `Self` comes with an incorrect lifetime
 
@@ -273,6 +356,19 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
     #[inline]
     #[must_use]
     /// Returns an iterator over the slice.
+    ///
+    /// # Example
+    /// ```
+    /// use dyn_slice::standard::debug;
+    ///
+    /// let slice = debug::new(&[1, 2, 3, 4, 5]);
+    /// let iter = slice.iter().map(|x| format!("{:?}!", x));
+    /// # assert_eq!(
+    /// #     format!("{:?}", iter.clone().collect::<Vec<String>>()),
+    /// #     r#"["1!", "2!", "3!", "4!", "5!"]"#
+    /// # );
+    /// println!("{:?}", iter.collect::<Vec<String>>()); // ["1!", "2!", "3!", "4!", "5!"]
+    /// ```
     pub const fn iter(&self) -> Iter<'_, Dyn> {
         Iter { slice: *self }
     }
@@ -434,5 +530,35 @@ mod test {
         for sub_slice in invalid_slices {
             assert!(sub_slice.is_none());
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn index_empty() {
+        let slice = new_display_dyn_slice::<u8>(&[]);
+        println!("{}", &slice[0]);
+    }
+
+    #[test]
+    fn index() {
+        let slice = new_display_dyn_slice::<u8>(&[1, 2, 3, 4]);
+        assert_eq!(format!("{}", &slice[0]), "1");
+        assert_eq!(format!("{}", &slice[1]), "2");
+        assert_eq!(format!("{}", &slice[2]), "3");
+        assert_eq!(format!("{}", &slice[3]), "4");
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn index_on_bound() {
+        let slice = new_display_dyn_slice::<u8>(&[1, 2, 3, 4]);
+        println!("{}", &slice[4]);
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn index_out_of_bounds() {
+        let slice = new_display_dyn_slice::<u8>(&[1, 2, 3, 4]);
+        println!("{}", &slice[6]);
     }
 }

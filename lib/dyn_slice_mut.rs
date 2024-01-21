@@ -8,6 +8,18 @@ use core::{
 use crate::{DynSlice, Iter, IterMut};
 
 /// `&mut dyn [Trait]`
+///
+/// A mutable type erased slice of elements that implement a trait.
+///
+/// # Example
+/// ```
+/// use dyn_slice::standard::add_assign;
+///
+/// let mut array = [1, 2, 3, 4, 5];
+/// let mut slice = add_assign::new_mut(&mut array);
+/// slice.iter_mut().for_each(|x| *x += 10);
+/// assert_eq!(array, [11, 12, 13, 14, 15]);
+/// ```
 #[repr(transparent)]
 pub struct DynSliceMut<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>>(
     pub(crate) DynSlice<'a, Dyn>,
@@ -116,6 +128,17 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
 
     #[must_use]
     /// Returns a mutable reference to the first element of the slice, or `None` if it is empty.
+    ///
+    /// # Example
+    /// ```
+    /// use dyn_slice::standard::add_assign;
+    ///
+    /// let mut array = [1, 2, 3, 4, 5];
+    /// let mut slice = add_assign::new_mut(&mut array);
+    ///
+    /// *slice.first_mut().unwrap() += 10;
+    /// assert_eq!(array, [11, 2, 3, 4, 5]);
+    /// ```
     pub fn first_mut(&mut self) -> Option<&mut Dyn> {
         (!self.0.is_empty()).then(|| {
             debug_assert!(
@@ -132,6 +155,17 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
 
     #[must_use]
     /// Returns a mutable reference to the last element of the slice, or `None` if it is empty.
+    ///
+    /// # Example
+    /// ```
+    /// use dyn_slice::standard::add_assign;
+    ///
+    /// let mut array = [1, 2, 3, 4, 5];
+    /// let mut slice = add_assign::new_mut(&mut array);
+    ///
+    /// *slice.last_mut().unwrap() += 10;
+    /// assert_eq!(array, [1, 2, 3, 4, 15]);
+    /// ```
     pub fn last_mut(&mut self) -> Option<&mut Dyn> {
         (!self.0.is_empty()).then(|| {
             // SAFETY:
@@ -143,6 +177,17 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
 
     #[must_use]
     /// Returns a mutable reference to the element at the given `index` or `None` if the `index` is out of bounds.
+    ///
+    /// # Example
+    /// ```
+    /// use dyn_slice::standard::add_assign;
+    ///
+    /// let mut array = [1, 2, 3, 4, 5];
+    /// let mut slice = add_assign::new_mut(&mut array);
+    ///
+    /// *slice.get_mut(2).unwrap() += 10;
+    /// assert_eq!(array, [1, 2, 13, 4, 5]);
+    /// ```
     pub fn get_mut(&mut self, index: usize) -> Option<&mut Dyn> {
         (index < self.0.len).then(|| {
             // SAFETY:
@@ -202,6 +247,20 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
 
     #[must_use]
     /// Returns a mutable sub-slice from the `start` index with the `len` or `None` if the slice is out of bounds.
+    ///
+    /// # Example
+    /// ```
+    /// use dyn_slice::standard::add_assign;
+    ///
+    /// let mut array = [1, 2, 3, 4, 5];
+    /// let mut slice = add_assign::new_mut(&mut array);
+    ///
+    /// slice.slice_mut(1..4).unwrap().iter_mut().for_each(|x| *x += 10);
+    /// slice.slice_mut(2..).unwrap().iter_mut().for_each(|x| *x += 10);
+    /// slice.slice_mut(5..).unwrap().iter_mut().for_each(|x| *x += 10);
+    /// assert!(slice.slice(6..).is_none());
+    /// assert_eq!(array, [1, 12, 23, 24, 15]);
+    /// ```
     pub fn slice_mut<R: RangeBounds<usize>>(&mut self, range: R) -> Option<DynSliceMut<Dyn>> {
         // NOTE: DO NOT MAKE THIS FUNCTION RETURN `Self` as `Self` comes with an incorrect lifetime
 
@@ -243,6 +302,17 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
     #[inline]
     #[must_use]
     /// Returns a mutable iterator over the slice.
+    ///
+    /// # Example
+    /// ```
+    /// use dyn_slice::standard::add_assign;
+    ///
+    /// let mut array = [1, 2, 3, 4, 5];
+    /// let mut slice = add_assign::new_mut(&mut array);
+    ///
+    /// slice.iter_mut().for_each(|x| *x += 10);
+    /// assert_eq!(array, [11, 12, 13, 14, 15]);
+    /// ```
     pub fn iter_mut(&mut self) -> IterMut<'_, Dyn> {
         IterMut {
             // SAFETY:
@@ -445,5 +515,38 @@ mod test {
 
             assert!(sub_slice.is_none());
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn index_empty() {
+        let slice = partial_eq::new_mut::<u8, u8>(&mut []);
+        _ = &slice[0];
+    }
+
+    #[test]
+    fn index() {
+        let mut array = [1, 2, 3, 4];
+        let slice = partial_eq::new_mut::<u8, u8>(&mut array);
+        assert!(slice[0] == 1);
+        assert!(slice[1] == 2);
+        assert!(slice[2] == 3);
+        assert!(slice[3] == 4);
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn index_on_bound() {
+        let mut array = [1, 2, 3, 4];
+        let slice = partial_eq::new_mut::<u8, u8>(&mut array);
+        _ = &slice[4];
+    }
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn index_out_of_bounds() {
+        let mut array = [1, 2, 3, 4];
+        let slice = partial_eq::new_mut::<u8, u8>(&mut array);
+        _ = &slice[6];
     }
 }
