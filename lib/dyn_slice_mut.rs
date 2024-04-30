@@ -77,7 +77,7 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
     /// # Safety
     /// Caller must ensure that:
     /// - `vtable_ptr` is a valid instance of `DynMetadata` transmuted, or optionally, a null pointer if `len == 0`,
-    /// - `len` <= then length of the slice in memory from the `data` pointer,
+    /// - `len` <= the length of the slice in memory from the `data` pointer,
     /// - `data` is a valid pointer to the slice,
     /// - the underlying slice is the same layout as [`[T]`](https://doc.rust-lang.org/reference/type-layout.html#slice-layout)
     pub const unsafe fn from_parts(vtable_ptr: *const (), len: usize, data: *mut ()) -> Self {
@@ -91,7 +91,7 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
     /// # Safety
     /// Caller must ensure that:
     /// - `metadata` is a valid instance of `DynMetadata`,
-    /// - `len` <= then length of the slice in memory from the `data` pointer,
+    /// - `len` <= the length of the slice in memory from the `data` pointer,
     /// - `data` is a valid pointer to the slice,
     /// - the underlying slice is the same layout as [`[T]`](https://doc.rust-lang.org/reference/type-layout.html#slice-layout)
     pub const unsafe fn from_parts_with_metadata(
