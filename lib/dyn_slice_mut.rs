@@ -54,7 +54,7 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
         value: &'a mut [DynSliceFromType],
         vtable_ptr: *const (),
     ) -> Self {
-        Self(DynSlice::with_vtable_ptr(value, vtable_ptr))
+        Self::from_parts(vtable_ptr, value.len(), value.as_mut_ptr().cast())
     }
 
     #[inline]

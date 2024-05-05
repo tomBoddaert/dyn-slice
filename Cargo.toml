@@ -35,7 +35,7 @@ members = [
 ]
 
 [workspace.package]
-version = "3.2.1"
+version = "3.2.2"
 authors = ["Tom Boddaert"]
 edition = "2021"
 homepage = "https://github.com/tomBoddaert/dyn-slice/"

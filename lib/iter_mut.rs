@@ -67,11 +67,11 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>> + 'a> Iterator for I
         self.next()
     }
 
-    fn last(self) -> Option<Self::Item> {
+    fn last(mut self) -> Option<Self::Item> {
         // SAFETY:
         // The data is guaranteed to live for at least 'a, and not have a mutable reference to it
         // in that time, so the lifetime can be extended.
-        unsafe { transmute(self.slice.last()) }
+        unsafe { transmute(self.slice.last_mut()) }
     }
 }
 
