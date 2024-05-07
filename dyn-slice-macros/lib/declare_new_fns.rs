@@ -142,7 +142,6 @@ impl TryFrom<DeclareNewFns> for TokenStream {
             })
             .map(stringify_basic_path)
             .collect::<Result<_, syn::Error>>()?;
-        // let mut inner_trait_paths: Vec<String> = traits.iter().map(stringify_basic_path).collect();
 
         // Get the trait names for documentation
         let mut trait_names: Vec<String> = object_bounds

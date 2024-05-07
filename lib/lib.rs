@@ -38,17 +38,17 @@
 mod compile_tests;
 mod dyn_slice;
 mod dyn_slice_mut;
-mod iter;
-mod iter_mut;
+/// Iterator types.
+pub mod iter;
 /// Dyn slice `new` and `new_mut` definitions for some common traits.
 ///
 /// If you want a dyn slice for a trait that is not here, use the [`declare_new_fns`] macro.
 pub mod standard;
+mod utils;
 
 pub use dyn_slice::*;
 pub use dyn_slice_mut::*;
-pub use iter::*;
-pub use iter_mut::*;
+pub use iter::{Iter, IterMut};
 
 /// Declare `new` and `new_mut` functions for dyn slices of a trait.
 ///
@@ -108,4 +108,170 @@ macro_rules! declare_new_fn {
                 $tr $(< $( $trgen ),* >)?
         );
     };
+}
+
+#[cfg(test)]
+mod test {
+    use core::fmt;
+
+    use dyn_slice_macros::declare_new_fns;
+
+    pub trait Ped<Rhs>: PartialEq<Rhs> + fmt::Debug {}
+    impl<T, Rhs> Ped<Rhs> for T where T: PartialEq<Rhs> + fmt::Debug {}
+
+    declare_new_fns! {
+        #[crate = crate]
+        pub ped<Rhs> Ped<Rhs>
+    }
+
+    macro_rules! test_iter {
+        (
+            $a:expr,
+            $ds:ident => $dsiter:expr,
+            $s:ident => $siter:expr,
+        ) => {
+            let a = $a;
+            let $ds = ped::new::<u8, u8>(&a);
+
+            let mut iter = $dsiter;
+            let mut expected_iter = {
+                let $s: &[u8] = &a;
+                $siter
+            };
+            assert_eq!(
+                iter.len(),
+                expected_iter.len(),
+                "initial length was not equal to expected initial length"
+            );
+
+            while let Some(expected) = expected_iter.next() {
+                let actual = iter.next().expect("expected another item");
+                assert_eq!(actual, expected, "item was not equal to expected item");
+
+                assert_eq!(
+                    iter.len(),
+                    expected_iter.len(),
+                    "length was not equal to expected length"
+                );
+            }
+
+            assert_eq!(iter.len(), 0, "length was not zero");
+            assert!(iter.next().is_none(), "expected no more elements");
+        };
+
+        (
+            mut $a:expr,
+            $ds:ident => $dsiter:expr,
+            $s:ident => $siter:expr,
+        ) => {
+            let a = $a;
+            let mut a_mut = a;
+            let mut $ds = ped::new_mut::<u8, u8>(&mut a_mut);
+
+            let mut iter = $dsiter;
+            let mut expected_iter = {
+                let $s: &[u8] = &a;
+                $siter
+            };
+            assert_eq!(
+                iter.len(),
+                expected_iter.len(),
+                "initial length was not equal to expected initial length"
+            );
+
+            while let Some(expected) = expected_iter.next() {
+                let actual = iter.next().expect("expected another item");
+                assert_eq!(actual, expected, "item was not equal to expected item");
+
+                assert_eq!(
+                    iter.len(),
+                    expected_iter.len(),
+                    "length was not equal to expected length"
+                );
+            }
+
+            assert_eq!(iter.len(), 0, "length was not zero");
+            assert!(iter.next().is_none(), "expected no more elements");
+        };
+
+        (@nth
+            $a:expr,
+            $ds:ident => $dsiter:expr,
+            $s:ident => $siter:expr,
+        ) => {
+            let a = $a;
+            let $ds = ped::new::<u8, u8>(&a);
+
+            let len = {
+                let $s: &[u8] = &a;
+                $siter.len()
+            };
+
+            for n in 0..len {
+                let mut iter = $dsiter;
+                let mut expected_iter = {
+                    let $s: &[u8] = &a;
+                    $siter
+                };
+
+                let expected = expected_iter
+                    .nth(n)
+                    .expect("This is a bug in the test: expected an item from the oracle iterator");
+                let actual = iter.nth(n).expect("expected an item");
+
+                assert_eq!(actual, expected, "item was not equal to expected item");
+
+                assert_eq!(
+                    iter.len(),
+                    expected_iter.len(),
+                    "length was not equal to expected length"
+                );
+            }
+
+            let mut iter = $dsiter;
+            assert!(iter.nth(len).is_none(), "expected no more elements");
+            assert_eq!(iter.len(), 0, "length was not zero");
+        };
+
+        (@nth
+            mut $a:expr,
+            $ds:ident => $dsiter:expr,
+            $s:ident => $siter:expr,
+        ) => {
+            let a = $a;
+            let mut a_mut = a;
+            let mut $ds = ped::new_mut::<u8, u8>(&mut a_mut);
+
+            let len = {
+                let $s: &[u8] = &a;
+                $siter.len()
+            };
+
+            for n in 0..len {
+                let mut iter = $dsiter;
+                let mut expected_iter = {
+                    let $s: &[u8] = &a;
+                    $siter
+                };
+
+                let expected = expected_iter
+                    .nth(n)
+                    .expect("This is a bug in the test: expected an item from the oracle iterator");
+                let actual = iter.nth(n).expect("expected an item");
+
+                assert_eq!(actual, expected, "item was not equal to expected item");
+
+                assert_eq!(
+                    iter.len(),
+                    expected_iter.len(),
+                    "length was not equal to expected length"
+                );
+            }
+
+            let mut iter = $dsiter;
+            assert!(iter.nth(len).is_none(), "expected no more elements");
+            assert_eq!(iter.len(), 0, "length was not zero");
+        };
+    }
+    pub(crate) use test_iter;
 }

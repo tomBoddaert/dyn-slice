@@ -1,11 +1,15 @@
 use core::{
     mem::transmute,
+    num::NonZeroUsize,
     ops::{Bound, Deref, Index, IndexMut, RangeBounds},
     ptr::{self, DynMetadata, Pointee},
     slice,
 };
 
-use crate::{DynSlice, Iter, IterMut};
+use crate::{
+    iter::{ChunksMut, RChunksMut},
+    DynSlice, Iter, IterMut,
+};
 
 /// `&mut dyn [Trait]`
 ///
@@ -208,18 +212,12 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
     pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut Dyn {
         debug_assert!(
             index < self.len,
-            "[dyn-slice] index is greater than length!"
-        );
-        debug_assert!(
-            !self.vtable_ptr.is_null(),
-            "[dyn-slice] vtable pointer is null on access!"
+            "[dyn-slice] index is greater than or equal to length!"
         );
 
         let metadata = transmute::<_, DynMetadata<Dyn>>(self.0.vtable_ptr());
-        &mut *ptr::from_raw_parts_mut::<Dyn>(
-            self.as_mut_ptr().byte_add(metadata.size_of() * index),
-            metadata,
-        )
+        let data = self.0.get_ptr_unchecked(index).cast_mut();
+        &mut *ptr::from_raw_parts_mut::<Dyn>(data, metadata)
     }
 
     #[inline]
@@ -237,12 +235,8 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
             "[dyn-slice] sub-slice is out of bounds!"
         );
 
-        let metadata = transmute::<_, DynMetadata<Dyn>>(self.0.vtable_ptr());
-        Self::from_parts_with_metadata(
-            metadata,
-            len,
-            self.as_mut_ptr().byte_add(metadata.size_of() * start),
-        )
+        let data = self.0.get_ptr_unchecked(start).cast_mut();
+        Self::from_parts(self.vtable_ptr(), len, data)
     }
 
     #[must_use]
@@ -301,6 +295,49 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
 
     #[inline]
     #[must_use]
+    /// Splits the mutable slice into two mutable slices at the index `mid`.
+    ///
+    /// The first slice contains indices from `0..mid`, and the second from `mid..self.len()`.
+    ///
+    /// If `mid > self.len()`, [`None`] is returned.
+    pub fn split_at_mut(&mut self, mid: usize) -> Option<(DynSliceMut<Dyn>, DynSliceMut<Dyn>)> {
+        (mid <= self.0.len()).then(|| {
+            // SAFETY:
+            // `mid <= length` is checked above, so is a valid split point.
+            unsafe { self.split_at_unchecked_mut(mid) }
+        })
+    }
+
+    #[inline]
+    #[must_use]
+    /// Splits the mutable slice into two mutable slices at the index `mid`, without doing bounds checking .
+    ///
+    /// The first slice contains indices from `0..mid`, and the second from `mid..self.len()`.
+    ///
+    /// # Safety
+    /// The caller must ensure that `mid <= self.len()`.
+    pub unsafe fn split_at_unchecked_mut(
+        &mut self,
+        mid: usize,
+    ) -> (DynSliceMut<Dyn>, DynSliceMut<Dyn>) {
+        // Short path for empty slices with null metadata
+        if mid == 0 {
+            return (
+                DynSliceMut::from_parts(self.0.vtable_ptr(), 0, self.as_mut_ptr()),
+                DynSliceMut::from_parts(self.0.vtable_ptr(), self.0.len(), self.as_mut_ptr()),
+            );
+        }
+
+        let second = self.get_ptr_unchecked(mid).cast_mut();
+
+        (
+            DynSliceMut::from_parts(self.vtable_ptr(), mid, self.as_mut_ptr()),
+            DynSliceMut::from_parts(self.vtable_ptr(), self.len() - mid, second),
+        )
+    }
+
+    #[inline]
+    #[must_use]
     /// Returns a mutable iterator over the slice.
     ///
     /// # Example
@@ -320,6 +357,58 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSliceMut<'a, Dyn
             // original slice, so must be valid.
             slice: unsafe { self.slice_unchecked_mut(0, self.len) },
         }
+    }
+
+    #[must_use]
+    #[inline]
+    /// Returns an iterator over chunks of the slice of length `chunk_size`.
+    ///
+    /// If `chunk_size` does not exactly divide the length, the last chunk will be shorter.
+    pub fn chunks_mut_non_zero(&mut self, chunk_size: NonZeroUsize) -> ChunksMut<'_, Dyn> {
+        ChunksMut {
+            // SAFETY:
+            // This creates copy of the slice with an inferior lifetime.
+            slice: unsafe {
+                DynSliceMut::from_parts(self.vtable_ptr(), self.len(), self.as_mut_ptr())
+            },
+            chunk_size,
+        }
+    }
+
+    #[must_use]
+    #[inline]
+    /// Returns an iterator over chunks of the slice of length `chunk_size`.
+    ///
+    /// If `chunk_size` does not exactly divide the length, the last chunk will be shorter.
+    /// If `chunk_size` is 0, this will return [`None`].
+    pub fn chunks_mut(&mut self, chunk_size: usize) -> Option<ChunksMut<'_, Dyn>> {
+        NonZeroUsize::new(chunk_size).map(|cs| self.chunks_mut_non_zero(cs))
+    }
+
+    #[must_use]
+    #[inline]
+    /// Returns an iterator over chunks of the slice of length `chunk_size` from right to left.
+    ///
+    /// If `chunk_size` does not exactly divide the length, the last chunk will be shorter.
+    pub fn rchunks_mut_non_zero(&mut self, chunk_size: NonZeroUsize) -> RChunksMut<'_, Dyn> {
+        RChunksMut {
+            // SAFETY:
+            // This creates copy of the slice with an inferior lifetime.
+            slice: unsafe {
+                DynSliceMut::from_parts(self.vtable_ptr(), self.len(), self.as_mut_ptr())
+            },
+            chunk_size,
+        }
+    }
+
+    #[must_use]
+    #[inline]
+    /// Returns an iterator over chunks of the slice of length `chunk_size` from right to left.
+    ///
+    /// If `chunk_size` does not exactly divide the length, the last chunk will be shorter.
+    /// If `chunk_size` is 0, this will return [`None`].
+    pub fn rchunks_mut(&mut self, chunk_size: usize) -> Option<RChunksMut<'_, Dyn>> {
+        NonZeroUsize::new(chunk_size).map(|cs| self.rchunks_mut_non_zero(cs))
     }
 }
 

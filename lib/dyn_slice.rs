@@ -1,13 +1,17 @@
 use core::{
     marker::PhantomData,
     mem::transmute,
+    num::NonZeroUsize,
     ops::{Bound, Index, RangeBounds},
     ptr,
     ptr::{DynMetadata, Pointee},
     slice,
 };
 
-use crate::Iter;
+use crate::{
+    iter::{Chunks, RChunks, Windows},
+    Iter,
+};
 
 /// `&dyn [Trait]`
 ///
@@ -255,14 +259,18 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
 
     #[inline]
     #[must_use]
-    /// Returns a reference to the element at the given `index`, without doing bounds checking.
+    /// Returns a pointer to the element at the given `index`, without doing bounds checking.
     ///
     /// # Safety
-    /// The caller must ensure that `index < self.len()`
-    /// Calling this on an empty dyn Slice will result in a segfault!
-    pub unsafe fn get_unchecked(&self, index: usize) -> &Dyn {
+    /// The caller must ensure that `index <= self.len()`.
+    pub unsafe fn get_ptr_unchecked(&self, index: usize) -> *const () {
+        // Short path for empty slices with null metadata
+        if index == 0 {
+            return self.as_ptr();
+        }
+
         debug_assert!(
-            index < self.len,
+            index <= self.len,
             "[dyn-slice] index is greater than length!"
         );
         debug_assert!(
@@ -271,7 +279,25 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
         );
 
         let metadata = transmute::<_, DynMetadata<Dyn>>(self.vtable_ptr());
-        &*ptr::from_raw_parts::<Dyn>(self.as_ptr().byte_add(metadata.size_of() * index), metadata)
+        self.as_ptr().byte_add(metadata.size_of() * index)
+    }
+
+    #[inline]
+    #[must_use]
+    /// Returns a reference to the element at the given `index`, without doing bounds checking.
+    ///
+    /// # Safety
+    /// The caller must ensure that `index < self.len()`.
+    /// Calling this on an empty `DynSlice` will result in a segfault!
+    pub unsafe fn get_unchecked(&self, index: usize) -> &Dyn {
+        debug_assert!(
+            index < self.len,
+            "[dyn-slice] index is greater than or equal to length!"
+        );
+
+        let metadata = transmute::<_, DynMetadata<Dyn>>(self.vtable_ptr());
+        let data = self.get_ptr_unchecked(index);
+        &*ptr::from_raw_parts::<Dyn>(data, metadata)
     }
 
     #[inline]
@@ -289,12 +315,8 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
             "[dyn-slice] sub-slice is out of bounds!"
         );
 
-        let metadata = transmute::<_, DynMetadata<Dyn>>(self.vtable_ptr());
-        Self::from_parts_with_metadata(
-            metadata,
-            len,
-            self.as_ptr().byte_add(metadata.size_of() * start),
-        )
+        let data = self.get_ptr_unchecked(start);
+        Self::from_parts(self.vtable_ptr(), len, data)
     }
 
     #[must_use]
@@ -355,6 +377,46 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
 
     #[inline]
     #[must_use]
+    /// Splits the slice into two slices at the index `mid`.
+    ///
+    /// The first slice contains indices from `0..mid`, and the second from `mid..self.len()`.
+    ///
+    /// If `mid > self.len()`, [`None`] is returned.
+    pub fn split_at(&self, mid: usize) -> Option<(DynSlice<Dyn>, DynSlice<Dyn>)> {
+        (mid <= self.len()).then(|| {
+            // SAFETY:
+            // `mid <= length` is checked above, so is a valid split point.
+            unsafe { self.split_at_unchecked(mid) }
+        })
+    }
+
+    #[inline]
+    #[must_use]
+    /// Splits the slice in two at the index `mid`, without doing bounds checking .
+    ///
+    /// The first slice contains indices from `0..mid`, and the second from `mid..self.len()`.
+    ///
+    /// # Safety
+    /// The caller must ensure that `mid <= self.len()`.
+    pub unsafe fn split_at_unchecked(&self, mid: usize) -> (DynSlice<Dyn>, DynSlice<Dyn>) {
+        // Short path for empty slices with null metadata
+        if mid == 0 {
+            return (
+                DynSlice::from_parts(self.vtable_ptr(), 0, self.as_ptr()),
+                *self,
+            );
+        }
+
+        let second = self.get_ptr_unchecked(mid);
+
+        (
+            DynSlice::from_parts(self.vtable_ptr(), mid, self.as_ptr()),
+            DynSlice::from_parts(self.vtable_ptr(), self.len() - mid, second),
+        )
+    }
+
+    #[inline]
+    #[must_use]
     /// Returns an iterator over the slice.
     ///
     /// # Example
@@ -371,6 +433,81 @@ impl<'a, Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>> DynSlice<'a, Dyn> {
     /// ```
     pub const fn iter(&self) -> Iter<'_, Dyn> {
         Iter { slice: *self }
+    }
+
+    #[must_use]
+    #[inline]
+    /// Returns an iterator over chunks of the slice of length `chunk_size`.
+    ///
+    /// If `chunk_size` does not exactly divide the length, the last chunk will be shorter.
+    pub const fn chunks_non_zero(&self, chunk_size: NonZeroUsize) -> Chunks<'_, Dyn> {
+        Chunks {
+            slice: *self,
+            chunk_size,
+        }
+    }
+
+    #[must_use]
+    #[inline]
+    /// Returns an iterator over chunks of the slice of length `chunk_size`.
+    ///
+    /// If `chunk_size` does not exactly divide the length, the last chunk will be shorter.
+    /// If `chunk_size` is 0, this will return [`None`].
+    pub const fn chunks(&self, chunk_size: usize) -> Option<Chunks<'_, Dyn>> {
+        // Implemented in a really awkward way to make it const
+        let Some(cs) = NonZeroUsize::new(chunk_size) else {
+            return None;
+        };
+        Some(self.chunks_non_zero(cs))
+    }
+
+    #[must_use]
+    #[inline]
+    /// Returns an iterator over chunks of the slice of length `chunk_size`, from right to left.
+    ///
+    /// If `chunk_size` does not exactly divide the length, the last chunk will be shorter.
+    pub const fn rchunks_non_zero(&self, chunk_size: NonZeroUsize) -> RChunks<'_, Dyn> {
+        RChunks {
+            slice: *self,
+            chunk_size,
+        }
+    }
+
+    #[must_use]
+    #[inline]
+    /// Returns an iterator over chunks of the slice of length `chunk_size`, from right to left.
+    ///
+    /// If `chunk_size` does not exactly divide the length, the last chunk will be shorter.
+    /// If `chunk_size` is 0, this will return [`None`].
+    pub const fn rchunks(&self, chunk_size: usize) -> Option<RChunks<'_, Dyn>> {
+        // Implemented in a really awkward way to make it const
+        let Some(cs) = NonZeroUsize::new(chunk_size) else {
+            return None;
+        };
+        Some(self.rchunks_non_zero(cs))
+    }
+
+    #[must_use]
+    #[inline]
+    /// Returns an iterator over overlapping subslices of the slice of length `window_size`.
+    pub const fn windows_non_zero(&self, window_size: NonZeroUsize) -> Windows<'_, Dyn> {
+        Windows {
+            slice: *self,
+            window_size,
+        }
+    }
+
+    #[must_use]
+    #[inline]
+    /// Returns an iterator over overlapping subslices of the slice of length `window_size`.
+    ///
+    /// If `window_size` is 0, this will return [`None`].
+    pub const fn windows(&self, window_size: usize) -> Option<Windows<'_, Dyn>> {
+        // Implemented in a really awkward way to make it const
+        let Some(ws) = NonZeroUsize::new(window_size) else {
+            return None;
+        };
+        Some(self.windows_non_zero(ws))
     }
 }
 
