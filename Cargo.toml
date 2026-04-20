@@ -1,43 +1,68 @@
 [package]
 name = "dyn-slice"
-version.workspace = true
-authors.workspace = true
-edition.workspace = true
+version = "4.0.0-alpha.1"
+authors = ["Tom Boddaert"]
+edition = "2024"
 description = "&dyn [Trait] implementation, inspired by a Reddit thread."
 readme = "README.md"
-homepage.workspace = true
-repository.workspace = true
-license.workspace = true
-keywords = ["dyn", "slice", "traits"]
-categories = ["data-structures", "no-std"]
-
-[lib]
-name = "dyn_slice"
-edition = "2021"
-path = "lib/lib.rs"
-crate-type = ["lib"]
-
-[features]
-default = ["std", "alloc"]
-std = ["alloc"]
-alloc = []
-
-[dependencies]
-dyn-slice-macros = { path = "dyn-slice-macros", version = "3.2.0" }
-
-[dev-dependencies]
-trybuild = { version = "1.0.82", features = ["diff"] }
-
-[workspace]
-resolver = "2"
-members = [
-  "dyn-slice-macros"
-]
-
-[workspace.package]
-version = "3.3.0-alpha.1"
-authors = ["Tom Boddaert"]
-edition = "2021"
 homepage = "https://github.com/tomBoddaert/dyn-slice/"
 repository = "https://github.com/tomBoddaert/dyn-slice/"
 license = "MIT OR Apache-2.0"
+keywords = ["dyn", "slice", "traits"]
+categories = ["data-structures", "no-std"]
+
+[features]
+default = ["std"]
+std = ["alloc"]
+alloc = []
+
+[dev-dependencies]
+trybuild = { version = "1.0.116", features = ["diff"] }
+
+[lints.clippy]
+# Groups
+all = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+
+# nursery
+option_if_let_else = "allow"
+
+# restrict
+alloc_instead_of_core = "warn"
+allow_attributes = "warn"
+as_pointer_underscore = "warn"
+as_underscore = "warn"
+cognitive_complexity = "warn"
+debug_macro = "warn"
+deref_by_slicing = "warn"
+get_unwrap = "warn"
+impl_trait_in_params = "warn"
+let_underscore_must_use = "warn"
+mixed_read_write_in_expression = "warn"
+multiple_inherent_impl = "warn"
+multiple_unsafe_ops_per_block = "warn"
+panic_in_result_fn = "warn"
+print_stderr = "warn"
+print_stdout = "warn"
+pub_without_shorthand = "warn"
+redundant_type_annotations = "warn"
+ref_patterns = "warn"
+renamed_function_params = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+same_name_method = "warn"
+self_named_module_files = "warn"
+semicolon_outside_block = "warn"
+shadow_unrelated = "warn"
+std_instead_of_alloc = "warn"
+std_instead_of_core = "warn"
+todo = "warn"
+unnecessary_safety_comment = "warn"
+unnecessary_safety_doc = "warn"
+unnecessary_self_imports = "warn"
+unneeded_field_pattern = "warn"
+unused_result_ok = "warn"
+unused_trait_names = "warn"
+unwrap_used = "warn"

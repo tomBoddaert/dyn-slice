@@ -1,7 +1,4 @@
-// Enable the required features (nightly must be used)
-#![feature(ptr_metadata)]
-
-use dyn_slice::declare_new_fns;
+use dyn_slice::DynSlice;
 
 // Create our custom trait
 pub trait MyTrait {
@@ -31,16 +28,11 @@ impl MyTrait for u16 {
     }
 }
 
-// Declare new functions for dyn slices of the trait
-declare_new_fns!(
-    my_trait_slice MyTrait
-);
-
 fn main() {
     let array: [u8; 4] = [1, 2, 3, 4];
 
     // Create the first dyn slice
-    let slice = my_trait_slice::new(&array);
+    let slice = DynSlice::<dyn MyTrait>::new(&array);
 
     // Get the first and last elements as u64
     let first = slice.first().map(MyTrait::to_u64);
@@ -51,7 +43,7 @@ fn main() {
     let array2: [u16; 3] = [5, 6, 7];
 
     // Create the second dyn slice
-    let slice2 = my_trait_slice::new(&array2);
+    let slice2 = DynSlice::<dyn MyTrait>::new(&array2);
 
     // Get the first and last elements as u64
     let first = slice2.first().map(MyTrait::to_u64);

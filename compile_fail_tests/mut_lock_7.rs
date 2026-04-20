@@ -1,14 +1,15 @@
 // Make sure that a mutable reference cannot be created while
 // there is a copy of an immutable reference
 
-use dyn_slice::standard::borrow;
+use dyn_slice::DynSliceMut;
+use std::borrow::BorrowMut;
 
 fn main() {
     let mut array_1 = [1, 2, 3, 4, 5];
-    let mut slice_1 = borrow::new_mut(&mut array_1);
+    let mut slice_1 = DynSliceMut::<dyn BorrowMut<i32>>::new(&mut array_1);
 
     let slice_3 = {
-        let slice_2 = slice_1.slice(..).unwrap();
+        let slice_2 = slice_1.coerce_shared();
         *&slice_2
     };
 

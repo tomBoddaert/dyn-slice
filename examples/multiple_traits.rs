@@ -1,7 +1,4 @@
-// Enable the required features (nightly must be used)
-#![feature(ptr_metadata)]
-
-use dyn_slice::declare_new_fns;
+use dyn_slice::DynSlice;
 use std::fmt::{Debug, Display};
 
 // If up to one trait is not auto-implemented, you can use the trait_alias feature
@@ -22,21 +19,16 @@ impl<T: Display> Display for Wrapper<T> {
     }
 }
 
-// Declare the new functions
-declare_new_fns!(
-    debug_display_slice DebugDisplay
-);
-
 fn main() {
     let array: [Wrapper<u8>; 4] = [Wrapper(1), Wrapper(2), Wrapper(3), Wrapper(4)];
 
     // Create the first dyn slice
-    let slice = debug_display_slice::new(&array);
+    let slice = DynSlice::<dyn DebugDisplay>::new(&array);
 
     let array2: [Wrapper<i16>; 3] = [Wrapper(5), Wrapper(6), Wrapper(7)];
 
     // Create the second dyn slice
-    let slice2 = debug_display_slice::new(&array2);
+    let slice2 = DynSlice::<dyn DebugDisplay>::new(&array2);
 
     // The iterators can be chained because they are iterators
     // over `&dyn DebugDisplay` rather than over the underlying types

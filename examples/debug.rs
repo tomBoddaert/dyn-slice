@@ -1,13 +1,14 @@
 // A dyn slice of any trait that requires Debug can be debug printed.
 // For example, DynSlice<dyn Error>.
 
-use dyn_slice::standard::debug;
+use dyn_slice::DynSlice;
+use std::fmt::Debug;
 
 fn main() {
     let array: [u8; 4] = [1, 2, 3, 4];
 
     // Create the first dyn slice
-    let slice = debug::new(&array);
+    let slice = DynSlice::<dyn Debug>::new(&array);
 
     // Debug print the slice
     println!("{slice:?}");

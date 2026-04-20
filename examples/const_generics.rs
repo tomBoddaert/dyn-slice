@@ -1,7 +1,4 @@
-// Enable the required features (nightly must be used)
-#![feature(ptr_metadata)]
-
-use dyn_slice::declare_new_fns;
+use dyn_slice::DynSlice;
 
 // Declare a trait with a constant parameter
 pub trait AddConst<const N: u8> {
@@ -15,19 +12,14 @@ impl<const N: u8> AddConst<N> for u8 {
     }
 }
 
-// Declare new functions for dyn slices of the trait
-declare_new_fns!(
-    add_const_slice<const N: u8> AddConst<N>
-);
-
 fn main() {
     // Create an array of u8
     let array = [5, 58, 97];
     // Create a dyn slice from the array
-    let slice = add_const_slice::new::<12, _>(&array);
+    let slice = DynSlice::<dyn AddConst<12>>::new(&array);
 
     // Add the numbers
-    let sums = slice.iter().map(|x| x.add());
+    let sums = slice.iter().map(AddConst::add);
     // Print the results
     println!("{:?}", sums.collect::<Vec<u8>>());
 }
