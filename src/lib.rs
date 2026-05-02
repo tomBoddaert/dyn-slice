@@ -41,10 +41,10 @@
 use core::{
     fmt,
     marker::{PhantomData, Unsize},
+    num::NonZero,
     ops::{CoerceShared, Index, IndexMut, Reborrow},
     ptr::{self, DynMetadata, NonNull, Pointee},
 };
-use std::num::NonZero;
 
 pub mod index;
 pub mod iter;
