@@ -20,6 +20,10 @@ where
     Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>,
     P: FnMut(&Dyn) -> bool,
 {
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "must be passed by value to capture the `'slice` lifetime"
+    )]
     #[must_use]
     #[inline]
     pub(crate) const fn new(slice: DynSliceMut<'slice, Dyn>, predicate: P) -> Self {
@@ -29,29 +33,17 @@ where
             _phantom: PhantomData,
         }
     }
-}
 
-impl<'slice, Dyn, P> SplitMut<'slice, Dyn, P>
-where
-    Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>,
-    P: FnMut(&Dyn) -> bool,
-{
     #[must_use]
     #[inline]
-    pub const fn remaining(&self) -> DynSlice<'slice, Dyn> {
-        DynSlice {
-            ptr: self.ptr,
-            _phantom: PhantomData,
-        }
+    pub const fn remaining(&self) -> DynSlice<'_, Dyn> {
+        unsafe { self.ptr.as_ref() }
     }
 
     #[must_use]
     #[inline]
     pub const fn remaining_mut(&mut self) -> DynSliceMut<'_, Dyn> {
-        DynSliceMut {
-            ptr: self.ptr,
-            _phantom: PhantomData,
-        }
+        unsafe { self.ptr.as_mut() }
     }
 
     #[must_use]
@@ -60,10 +52,7 @@ where
     where
         P: [const] Destruct,
     {
-        DynSliceMut {
-            ptr: self.ptr,
-            _phantom: PhantomData,
-        }
+        unsafe { self.ptr.as_mut() }
     }
 }
 

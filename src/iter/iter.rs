@@ -22,6 +22,7 @@ where
     type Item = &'slice Dyn;
     type IntoIter = Iter<'slice, Dyn>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         Iter {
             ptr: self.ptr,
@@ -37,10 +38,7 @@ where
     #[must_use]
     #[inline]
     pub const fn remaining(&self) -> DynSlice<'slice, Dyn> {
-        DynSlice {
-            ptr: self.ptr,
-            _phantom: PhantomData,
-        }
+        unsafe { self.ptr.as_ref() }
     }
 }
 
@@ -50,6 +48,7 @@ where
 {
     type Item = &'slice Dyn;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         self.ptr.len = self.ptr.len.checked_sub(1)?;
 
@@ -61,6 +60,7 @@ where
         Some(unsafe { ptr.as_ref() })
     }
 
+    #[inline]
     fn advance_by(&mut self, n: usize) -> Result<(), core::num::NonZero<usize>> {
         if n > self.ptr.len {
             let remaining = unsafe { NonZero::new_unchecked(n - self.ptr.len) };
@@ -88,6 +88,7 @@ impl<Dyn> DoubleEndedIterator for Iter<'_, Dyn>
 where
     Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>,
 {
+    #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         let last = self.ptr.len.checked_sub(1)?;
         self.ptr.len = last;
@@ -98,6 +99,7 @@ where
         Some(unsafe { ptr.as_ref() })
     }
 
+    #[inline]
     fn advance_back_by(&mut self, n: usize) -> Result<(), NonZero<usize>> {
         if n > self.ptr.len {
             let remaining = unsafe { NonZero::new_unchecked(n - self.ptr.len) };

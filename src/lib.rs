@@ -1,6 +1,6 @@
 //! An implementation for a `&[dyn Trait]`-like type, inspired by a [Reddit thread](https://www.reddit.com/r/rust/comments/14i08gz/dyn_slices).
 //!
-//! Indexing into a dyn-slice yields a dyn object.
+//! Indexing into a dyn-slice yields a [trait object](https://doc.rust-lang.org/stable/reference/types/trait-object.html).
 //!
 //! # Examples
 //!
@@ -44,9 +44,9 @@ use core::{
     ops::{CoerceShared, Index, IndexMut, Reborrow},
     ptr::{self, DynMetadata, NonNull, Pointee},
 };
+use std::num::NonZero;
 
-// mod as_slice;
-mod index;
+pub mod index;
 pub mod iter;
 mod standard;
 pub use index::SliceIndex;
@@ -58,8 +58,11 @@ pub struct DynSlicePtr<Dyn>
 where
     Dyn: ?Sized,
 {
+    /// Pointer to the start of the slice.
     pub addr: NonNull<()>,
+    /// Number of elements in the slice.
     pub len: usize,
+    /// Dyn metadata of the elements for `Dyn`.
     pub dyn_metadata: <Dyn as Pointee>::Metadata,
 }
 
@@ -112,9 +115,12 @@ impl<Dyn> DynSlicePtr<Dyn>
 where
     Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>,
 {
-    // TODO: safety
-    // - Must be in bounds of allocation
-    // - Metadata must be valid
+    /// Adds an offset of `count` elements to the pointer.
+    ///
+    /// # Safety
+    /// - If the computed offset is non-zero, then `self` must be derived from a pointer to some [allocation](https://doc.rust-lang.org/1.95.0/std/ptr/index.html#allocation), and the entire memory range between `self` and the result must be in bounds of that allocation.
+    ///   - If `self.ptr` is aligned with an element in the slice and `count` is at most the remaining length in the allocation (or slice), then the above holds.
+    /// - `self.metadata` must be valid for the underlying type.
     #[must_use]
     #[inline]
     pub unsafe fn add(self, count: usize) -> NonNull<()> {
@@ -122,6 +128,13 @@ where
         unsafe { self.addr.byte_add(count * size) }
     }
 
+    /// Returns a shared reference to the slice.
+    ///
+    /// # Safety
+    /// - `self.ptr` must be aligned with an element of the slice.
+    /// - If `self.len` is non-zero and the underlying type is non-zero-sized, `self.ptr` must be in an [allocation](https://doc.rust-lang.org/1.95.0/std/ptr/index.html#allocation) valid for reads. The entire memory range of `self` (`self.ptr..(self.ptr + self.len)` in units of the underlying type) must also be contained in this same allocation.
+    /// - `self.metadata` must be valid for the underlying type
+    /// - Rust's aliasing rules must be enforced. For more information, see `std`'s [Pointer to reference conversion](https://doc.rust-lang.org/1.95.0/std/ptr/index.html#pointer-to-reference-conversion).
     #[must_use]
     #[inline]
     pub const unsafe fn as_ref<'slice>(self) -> DynSlice<'slice, Dyn> {
@@ -131,6 +144,13 @@ where
         }
     }
 
+    /// Returns an exclusive reference to the slice.
+    ///
+    /// # Safety
+    /// - `self.ptr` must be aligned with an element of the slice.
+    /// - If `self.len` is non-zero and the underlying type is non-zero-sized, `self.ptr` must be in an [allocation](https://doc.rust-lang.org/1.95.0/std/ptr/index.html#allocation) valid for reads and writes. The entire memory range of `self` (`self.ptr..(self.ptr + self.len)` in units of the underlying type) must also be contained in this same allocation.
+    /// - `self.metadata` must be valid for the underlying type
+    /// - Rust's aliasing rules must be enforced. For more information, see `std`'s [Pointer to reference conversion](https://doc.rust-lang.org/1.95.0/std/ptr/index.html#pointer-to-reference-conversion).
     #[must_use]
     #[inline]
     pub const unsafe fn as_mut<'slice>(self) -> DynSliceMut<'slice, Dyn> {
@@ -140,6 +160,11 @@ where
         }
     }
 
+    /// Split the slice pointer in two at `mid`. The `mid` element ends up in the second sub-slice.
+    ///
+    /// # Safety
+    /// - `mid` must be at most `self.len` (`mid <= self.len`).
+    /// - The safety conditions for [`Self::add`] with `count = mid` must be met.
     #[must_use]
     pub unsafe fn split_at_unchecked(self, mid: usize) -> (Self, Self) {
         debug_assert!(mid <= self.len);
@@ -277,6 +302,21 @@ where
     #[inline]
     pub const fn iter(self) -> iter::Iter<'slice, Dyn> {
         self.into_iter()
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn chunks_non_zero(self, chunk_size: NonZero<usize>) -> iter::Chunks<'slice, Dyn> {
+        iter::Chunks::new(self, chunk_size)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn chunks(self, chunk_size: usize) -> iter::Chunks<'slice, Dyn> {
+        let Some(chunk_size) = NonZero::new(chunk_size) else {
+            panic!("chunk size must be non-zero");
+        };
+        iter::Chunks::new(self, chunk_size)
     }
 
     #[must_use]
@@ -427,6 +467,21 @@ where
     #[inline]
     pub const fn iter_mut(self) -> iter::IterMut<'slice, Dyn> {
         self.into_iter()
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn chunks_non_zero(self, chunk_size: NonZero<usize>) -> iter::ChunksMut<'slice, Dyn> {
+        iter::ChunksMut::new(self, chunk_size)
+    }
+
+    #[must_use]
+    #[inline]
+    pub const fn chunks(self, chunk_size: usize) -> iter::ChunksMut<'slice, Dyn> {
+        let Some(chunk_size) = NonZero::new(chunk_size) else {
+            panic!("chunk size must be non-zero");
+        };
+        iter::ChunksMut::new(self, chunk_size)
     }
 
     #[must_use]

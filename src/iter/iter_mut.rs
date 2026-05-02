@@ -37,28 +37,19 @@ where
     #[must_use]
     #[inline]
     pub const fn remaining(&self) -> DynSlice<'_, Dyn> {
-        DynSlice {
-            ptr: self.ptr,
-            _phantom: PhantomData,
-        }
+        unsafe { self.ptr.as_ref() }
     }
 
     #[must_use]
     #[inline]
     pub const fn remaining_mut(&mut self) -> DynSliceMut<'_, Dyn> {
-        DynSliceMut {
-            ptr: self.ptr,
-            _phantom: PhantomData,
-        }
+        unsafe { self.ptr.as_mut() }
     }
 
     #[must_use]
     #[inline]
     pub const fn to_remaining(self) -> DynSliceMut<'slice, Dyn> {
-        DynSliceMut {
-            ptr: self.ptr,
-            _phantom: PhantomData,
-        }
+        unsafe { self.ptr.as_mut() }
     }
 }
 

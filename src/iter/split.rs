@@ -29,20 +29,11 @@ where
             _phantom: PhantomData,
         }
     }
-}
 
-impl<'slice, Dyn, P> Split<'slice, Dyn, P>
-where
-    Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>,
-    P: FnMut(&Dyn) -> bool,
-{
     #[must_use]
     #[inline]
     pub const fn remaining(&self) -> DynSlice<'slice, Dyn> {
-        DynSlice {
-            ptr: self.ptr,
-            _phantom: PhantomData,
-        }
+        unsafe { self.ptr.as_ref() }
     }
 }
 
@@ -124,6 +115,7 @@ where
     Dyn: ?Sized + Pointee<Metadata = DynMetadata<Dyn>>,
     P: FnMut(&Dyn) -> bool + [const] Clone,
 {
+    #[inline]
     fn clone(&self) -> Self {
         Self {
             ptr: self.ptr,

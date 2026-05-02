@@ -10,7 +10,7 @@ checksum = "aeda16ab4059c5fd2a83f2b9c9e9c981327b18aa8e3b313f7e6563799d4f093e"
 
 [[package]]
 name = "dyn-slice"
-version = "4.0.0-alpha.1"
+version = "4.0.0-alpha.2"
 dependencies = [
  "trybuild",
 ]
